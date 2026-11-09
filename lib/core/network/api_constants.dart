@@ -7,7 +7,7 @@ class ApiConstants {
 
   static const String geminiModelName = 'gemini-3.8-flash';
 
-  static const Duration requestTimeout = Duration(seconds: 60);
+  static const Duration requestTimeout = Duration(seconds: 90);
 
   /// Kept in infrastructure for future B2B/SaaS monetization.
   /// Set to false for internal corporate HR rollout so users are never shown a paywall.
