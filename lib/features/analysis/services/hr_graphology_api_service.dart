@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import '../../../core/network/api_constants.dart';
 import '../models/analysis_mode.dart';
 import '../models/hr_candidate_report.dart';
@@ -14,6 +15,21 @@ class GraphologyValidationException implements Exception {
 class HrGraphologyApiService {
   static String _generateId(String hash) =>
       '${DateTime.now().millisecondsSinceEpoch}_${hash.substring(0, 8)}';
+
+  /// Compresses and normalizes image bytes to a lightweight JPEG (max 1024px)
+  /// so the Cloudflare Worker + Gemini Vision call responds reliably.
+  Uint8List _optimizeForUpload(Uint8List rawBytes) {
+    try {
+      final decoded = img.decodeImage(rawBytes);
+      if (decoded == null) return rawBytes;
+      final resized = decoded.width > 1024
+          ? img.copyResize(decoded, width: 1024)
+          : decoded;
+      return Uint8List.fromList(img.encodeJpg(resized, quality: 82));
+    } catch (_) {
+      return rawBytes;
+    }
+  }
 
   Future<HrCandidateReport> analyzeSample({
     required AnalysisMode mode,
@@ -30,17 +46,21 @@ class HrGraphologyApiService {
       );
     }
 
-    final normalizedCandidate =
-        candidateLabel.trim().isEmpty ? 'HR-${telemetry.sha256Hash.substring(0, 6).toUpperCase()}' : candidateLabel.trim();
+    final normalizedCandidate = candidateLabel.trim().isEmpty
+        ? 'HR-${telemetry.sha256Hash.substring(0, 6).toUpperCase()}'
+        : candidateLabel.trim();
 
-    // Stage 2: Grounded AI Corporate HR Synthesis via Cloudflare Worker
+    // Stage 2: Grounded AI Corporate HR Synthesis via Cloudflare Worker (Gemini Vision)
     try {
+      final optimizedBytes = _optimizeForUpload(imageBytes);
+      final encodedImage = base64Encode(optimizedBytes);
+
       final payload = <String, dynamic>{
         'mode': mode.name,
-        'localeCode': localeCode,
-        'includeAstrology': false,
+        'locale': localeCode,
+        'handwritingImageBase64': encodedImage,
+        'includeAstroSynthesis': false,
         'pixelTelemetry': telemetry.toJson(),
-        'handwritingBase64': base64Encode(imageBytes),
         'styleDirective': _buildHrStyleDirective(
           mode: mode,
           targetRole: targetRole,
@@ -55,11 +75,11 @@ class HrGraphologyApiService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 38));
+          .timeout(ApiConstants.requestTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        if (data['validSample'] == false) {
+        if (data['isValidSample'] == false || data['validSample'] == false) {
           throw const GraphologyValidationException('AI_REJECTED_NON_INK');
         }
         if (data['executiveSummary'] != null && data['dimensions'] != null) {
@@ -94,13 +114,21 @@ class HrGraphologyApiService {
     required String candidateLabel,
     required String localeCode,
   }) {
-    return 'CORPORATE HR & TALent ACQUISITION ASSESSMENT DIRECTIVE (Language: $localeCode, Candidate Ref: $candidateLabel, Target Role Profile: ${targetRole.name}): '
-        '1. ZERO ASTROLOGY: Do NOT mention astrology, zodiac signs, planets, or cosmic terms anywhere. This is strictly a corporate HR & organizational behavior assessment. '
-        '2. INCISIVE, REALISTIC, UNVARNISHED HR TONE — YET PROBABILISTIC & NON-DETERMINISTIC: Be significantly more candid, unvarnished, and realistic than a consumer app. Do NOT flatter the candidate or paint a rosy picture. Expose potential friction points in corporate life: authority resistance, micro-management, delegation anxiety, ego defensiveness, organizational scatter, or fragility under KPI pressure. HOWEVER, strictly avoid absolute deterministic judgments; always frame findings as behavioral tendencies, probabilities, and risks to verify in interviews (e.g., "eğilim gösterir", "baskı altında ... riski barındırır", "mülakatta şu sorularla sınanmalıdır"). '
-        '3. CORE HR QUESTIONS TO ANSWER CLEARLY: How is the candidate\'s internal discipline and organizational capability? Are they rebellious/unruly (Asi / Başına buyruk) or manageable/cooperative (Yönetilebilir / Kurumsal uyumlu)? Are they a directive leader (Lider), a hands-on executor/doer (İşi yapan icracı), or a stage-managed showman (Vitrin odaklı)? Are they emotionally fragile/thin-skinned (Kırılgan) or resilient under pressure (Resilient / Dayanıklı)? '
-        '4. PUBLIC-FIGURE IDENTITY BLINDNESS & INTERVIEW MASK DETECTION: Completely ignore any famous/historical identity or semantic prestige in the text or signature. Distinguish spontaneous working notes from a rehearsed, stage-managed interview/PR mask. '
-        '5. PARAGRAPHIC EMPHASIS GESTURES IN HANDWRITING MODE: When mode is "handwriting" and no separate signature exists, use observedMetrics.signatureGeometry to analyze underlining, double-underlining, exclamation marks, arrows, and numeric/financial target framing as indicators of operational prioritization and directive emphasis. '
-        '6. JSON STRUCTURE EXTENSION: In addition to observedMetrics, executiveSummary (2 rich paragraphs, 8-10 sentences total), and comparativeSynthesis, include a "corporateSpectrum" object with keys {"manageability", "roleArchetype", "resilience", "discipline"} (each 1-2 crisp analytical sentences positioning the candidate on that axis) AND in "dimensions" provide 6 keys {"discipline", "manageability", "roleNature", "resilience", "teamEgo", "redFlags"} (each 4-6 complete sentences; "redFlags" MUST include 2-3 concrete behavioral interview verification questions). Never output raw degree (°) or percentage (%) numbers.';
+    return 'IMPORTANT OVERRIDE — CORPORATE HR & TALENT ACQUISITION EDITION (Language: $localeCode, Candidate Ref: $candidateLabel, Target Role Profile: ${targetRole.name}):\n'
+        'You are now acting as an incisive, realistic Senior Corporate HR & Organizational Behavior Assessor evaluating a job candidate from their handwriting/notes/signature.\n'
+        '1. ZERO ASTROLOGY: Do NOT mention astrology, zodiac signs, planets, or cosmic terms anywhere.\n'
+        '2. INCISIVE, REALISTIC, UNVARNISHED HR TONE — YET PROBABILISTIC & NON-DETERMINISTIC: Be significantly more candid, unvarnished, and realistic than a consumer app ("pembe tablo çizme"). Do NOT flatter or romanticize the writer. Explicitly surface potential corporate friction points: authority resistance, micro-management intolerance, delegation anxiety, ego defensiveness, organizational scatter, or fragility under KPI stress. HOWEVER, strictly avoid absolute deterministic judgments; always frame findings as behavioral tendencies, probabilities, and risks to verify in interviews (e.g., "eğilim gösterir", "yüksek olasılıkla ... riski barındırır", "baskı altında ... tepkisi verme potansiyeli taşır", "mülakatta şu sorularla sınanmalıdır").\n'
+        '3. CORE HR QUESTIONS TO ANSWER CLEARLY:\n'
+        '   - How is the candidate\'s internal discipline, organization skill, and execution follow-through?\n'
+        '   - Are they rebellious/unruly (Asi / Başına buyruk) or manageable/cooperative (Yönetilebilir / Kurumsal uyumlu)?\n'
+        '   - Are they a directive leader (Lider), a hands-on executor/doer (İşi yapan icracı), or a stage-managed showman (Vitrin odaklı)?\n'
+        '   - Are they emotionally fragile/thin-skinned (Kırılgan) or resilient under pressure (Resilient / Dayanıklı)?\n'
+        '4. PUBLIC-FIGURE IDENTITY BLINDNESS & INTERVIEW MASK DETECTION: Completely ignore any famous/historical identity or semantic prestige in the text or signature. Distinguish spontaneous working notes from a rehearsed, stage-managed interview/PR mask.\n'
+        '5. PARAGRAPHIC EMPHASIS GESTURES IN HANDWRITING MODE: When mode is "handwriting" and no separate signature exists, use observedMetrics.signatureStructure to analyze underlining, wavy underlines, exclamation marks, arrows, and numeric/financial target framing as indicators of operational prioritization and directive emphasis (without calling them an official signature).\n'
+        '6. JSON OUTPUT KEYS MANDATE: In your JSON output, include:\n'
+        '   - "corporateSpectrum": { "manageability": "1-2 sentences positioning candidate on Rebellious vs. Manageable axis", "roleArchetype": "1-2 sentences positioning candidate on Hands-on Doer vs. Directive Leader vs. Showman axis", "resilience": "1-2 sentences positioning candidate on Fragile vs. Resilient axis", "discipline": "1-2 sentences positioning candidate on Scattered vs. Self-Disciplined axis" }\n'
+        '   - Inside "dimensions", provide these 6 keys (each 4-6 complete, analytical sentences): "discipline" (Self-discipline & organization), "manageability" (Attitude toward authority & corporate rules: rebellious vs. manageable), "roleNature" (Leader vs. Hands-on Doer vs. Showman), "resilience" (Stress resilience vs. fragility under pressure), "teamEgo" (Team communication, ego boundaries & conflict style), and "redFlags" (Concrete hiring watch-outs / red flags + 3 specific behavioral interview probing questions to ask this candidate).\n'
+        '   - Never output raw degree (°) or percentage (%) numbers.';
   }
 
   HrCandidateReport _parseAndEnrichWorkerResponse({
@@ -132,13 +160,20 @@ class HrGraphologyApiService {
       baseline:
           _nonEmpty(rawMetrics['baseline'], fallback.observedMetrics.baseline),
       size: _nonEmpty(rawMetrics['size'], fallback.observedMetrics.size),
-      zones: _nonEmpty(rawMetrics['zones'], fallback.observedMetrics.zones),
+      zones: _nonEmpty(
+        rawMetrics['zones'] ?? rawMetrics['zoneDominance'],
+        fallback.observedMetrics.zones,
+      ),
       connectivity: _nonEmpty(
           rawMetrics['connectivity'], fallback.observedMetrics.connectivity),
-      marginsAndSpacing: _nonEmpty(rawMetrics['marginsAndSpacing'],
-          fallback.observedMetrics.marginsAndSpacing),
-      signatureGeometry: _nonEmpty(rawMetrics['signatureGeometry'],
-          fallback.observedMetrics.signatureGeometry),
+      marginsAndSpacing: _nonEmpty(
+        rawMetrics['marginsAndSpacing'] ?? rawMetrics['spacing'],
+        fallback.observedMetrics.marginsAndSpacing,
+      ),
+      signatureGeometry: _nonEmpty(
+        rawMetrics['signatureGeometry'] ?? rawMetrics['signatureStructure'],
+        fallback.observedMetrics.signatureGeometry,
+      ),
     );
 
     final corporateSpectrum = CorporateSpectrum(
@@ -160,7 +195,6 @@ class HrGraphologyApiService {
       ),
     );
 
-    // Map 6 HR dimensions cleanly whether the Worker returned the 6 HR keys or standard 5 keys
     final dimensions = HrDimensions(
       discipline: _nonEmpty(
         rawDims['discipline'] ?? rawDims['work'],
@@ -171,7 +205,7 @@ class HrGraphologyApiService {
         fallback.dimensions.manageability,
       ),
       roleNature: _nonEmpty(
-        rawDims['roleNature'],
+        rawDims['roleNature'] ?? rawDims['work'],
         fallback.dimensions.roleNature,
       ),
       resilience: _nonEmpty(
