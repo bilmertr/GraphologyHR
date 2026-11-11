@@ -4,6 +4,7 @@ import '../models/analysis_mode.dart';
 import '../models/hr_candidate_report.dart';
 import '../services/hr_archive_service.dart';
 import '../services/hr_graphology_api_service.dart';
+import '../services/pixel_graphology_extractor.dart';
 
 class HrAnalysisState {
   final AnalysisMode mode;
@@ -84,12 +85,53 @@ class HrAnalysisNotifier extends StateNotifier<HrAnalysisState> {
     state = state.copyWith(imageBytes: bytes, clearError: true);
   }
 
+  void clearImage() {
+    state = state.copyWith(clearImage: true, clearError: true);
+  }
+
   void clearError() {
     state = state.copyWith(clearError: true);
   }
 
+  Future<void> deleteArchivedReport(String id) async {
+    await _archiveService.deleteReport(id);
+    final updated = await _archiveService.loadReports();
+    state = state.copyWith(archivedReports: updated);
+  }
+
+  Future<void> clearAllArchivedReports() async {
+    await _archiveService.clearAllReports();
+    state = state.copyWith(archivedReports: const []);
+  }
+
   Future<HrCandidateReport?> runAnalysis({required String localeCode}) async {
-    if (state.imageBytes == null) return null;
+    final bytes = state.imageBytes;
+    if (bytes == null || bytes.isEmpty) return null;
+
+    // Check deterministic SHA-256 Live AI cache first
+    final telemetry = PixelGraphologyExtractor.analyzeBytes(bytes);
+    if (telemetry.isValidInkSample) {
+      final cached = await _archiveService.findCachedReport(
+        imageHash: telemetry.sha256Hash,
+        mode: state.mode,
+        targetRole: state.targetRole,
+        localeCode: localeCode,
+      );
+      if (cached != null) {
+        final sanitizedLabel = HrGraphologyApiService.sanitizeCandidateLabel(
+          state.candidateLabel,
+          fallbackHash: telemetry.sha256Hash,
+        );
+        final resolved = cached.copyWithCandidateLabel(sanitizedLabel);
+        state = state.copyWith(
+          isLoading: false,
+          activeReport: resolved,
+          clearError: true,
+        );
+        return resolved;
+      }
+    }
+
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
@@ -98,7 +140,7 @@ class HrAnalysisNotifier extends StateNotifier<HrAnalysisState> {
         targetRole: state.targetRole,
         candidateLabel: state.candidateLabel,
         localeCode: localeCode,
-        imageBytes: state.imageBytes!,
+        imageBytes: bytes,
       );
       await _archiveService.saveReport(report);
       final updatedArchive = await _archiveService.loadReports();

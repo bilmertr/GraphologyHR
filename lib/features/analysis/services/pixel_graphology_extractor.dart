@@ -21,6 +21,7 @@ class PixelTelemetry {
   final double rightMarginRatio;
   final double connectivityIndex; // 0.0 (disconnected) to 1.0 (highly connected)
   final double strokeAngularityIndex; // 0.0 (rounded garland) to 1.0 (sharp angular)
+  final bool hasRuledLines; // true when periodic horizontal notebook lines are detected
 
   const PixelTelemetry({
     required this.sha256Hash,
@@ -37,6 +38,7 @@ class PixelTelemetry {
     required this.rightMarginRatio,
     required this.connectivityIndex,
     required this.strokeAngularityIndex,
+    this.hasRuledLines = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -56,12 +58,37 @@ class PixelTelemetry {
         'connectivityIndex': double.parse(connectivityIndex.toStringAsFixed(2)),
         'strokeAngularityIndex':
             double.parse(strokeAngularityIndex.toStringAsFixed(2)),
+        'hasRuledLines': hasRuledLines,
       };
 }
 
 class PixelGraphologyExtractor {
+  /// Maximum raw image byte size (18 MB) accepted before decoding to prevent memory DoS.
+  static const int maxRawImageBytes = 18 * 1024 * 1024;
+
   /// Extracts deterministic geometric & ink-density metrics from raw image bytes.
+  /// Uses block-adaptive local paper luminance estimation so uneven smartphone
+  /// shadows neither reject valid handwriting nor inflate pen-pressure metrics.
   static PixelTelemetry analyzeBytes(Uint8List bytes) {
+    if (bytes.isEmpty || bytes.length > maxRawImageBytes) {
+      return const PixelTelemetry(
+        sha256Hash: '',
+        isValidInkSample: false,
+        invalidReasonKey: 'IMAGE_EMPTY_OR_TOO_LARGE',
+        inkCoveragePercent: 0,
+        pressureIndex: 0,
+        slantDegrees: 0,
+        baselineSlopeDegrees: 0,
+        upperZoneRatio: 0.33,
+        middleZoneRatio: 0.34,
+        lowerZoneRatio: 0.33,
+        leftMarginRatio: 0.1,
+        rightMarginRatio: 0.1,
+        connectivityIndex: 0.5,
+        strokeAngularityIndex: 0.5,
+      );
+    }
+
     final hash = sha256.convert(bytes).toString();
     final decoded = img.decodeImage(bytes);
 
@@ -113,11 +140,43 @@ class PixelGraphologyExtractor {
       }
     }
 
-    final meanLum = sumLum / totalPixels;
+    final globalMeanLum = sumLum / totalPixels;
     final meanSat = sumSat / totalPixels;
 
-    final threshold = math.max(40.0, meanLum * 0.74);
+    // 6x6 block-adaptive local paper luminance grid to compensate for camera shadows
+    const gridCols = 6;
+    const gridRows = 6;
+    final tileBg = Float64List(gridCols * gridRows);
+    for (int gy = 0; gy < gridRows; gy++) {
+      final y0 = (gy * h) ~/ gridRows;
+      final y1 = ((gy + 1) * h) ~/ gridRows;
+      for (int gx = 0; gx < gridCols; gx++) {
+        final x0 = (gx * w) ~/ gridCols;
+        final x1 = ((gx + 1) * w) ~/ gridCols;
+        double tileSum = 0;
+        double tileMax = 0;
+        int count = 0;
+        for (int y = y0; y < y1; y++) {
+          for (int x = x0; x < x1; x++) {
+            final l = lumGrid[y * w + x];
+            tileSum += l;
+            if (l > tileMax) tileMax = l;
+            count++;
+          }
+        }
+        final tileMean = count > 0 ? tileSum / count : globalMeanLum;
+        tileBg[gy * gridCols + gx] = (tileMean * 0.65) + (tileMax * 0.35);
+      }
+    }
 
+    double localThresholdAt(int x, int y) {
+      final gx = ((x * gridCols) ~/ w).clamp(0, gridCols - 1);
+      final gy = ((y * gridRows) ~/ h).clamp(0, gridRows - 1);
+      final localPaper = tileBg[gy * gridCols + gx];
+      return math.max(38.0, localPaper * 0.76);
+    }
+
+    final isInkMask = Uint8List(totalPixels);
     int inkCount = 0;
     double inkDarknessSum = 0;
     int minX = w, maxX = 0, minY = h, maxY = 0;
@@ -126,20 +185,19 @@ class PixelGraphologyExtractor {
     double rightYWeighted = 0;
     int rightInkCount = 0;
 
-    int upperCount = 0;
-    int middleCount = 0;
-    int lowerCount = 0;
-
-    int horizontalNeighbors = 0;
-    int diagonalRightNeighbors = 0;
-    int diagonalLeftNeighbors = 0;
-
+    int ruledRowCount = 0;
     for (int y = 1; y < h - 1; y++) {
+      int rowMediumDark = 0;
       for (int x = 1; x < w - 1; x++) {
         final lum = lumGrid[y * w + x];
-        if (lum < threshold) {
+        final thresh = localThresholdAt(x, y);
+        if (lum < thresh * 1.12) {
+          rowMediumDark++;
+        }
+        if (lum < thresh) {
+          isInkMask[y * w + x] = 1;
           inkCount++;
-          inkDarknessSum += (threshold - lum) / threshold;
+          inkDarknessSum += (thresh - lum) / thresh;
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
           if (y < minY) minY = y;
@@ -152,14 +210,27 @@ class PixelGraphologyExtractor {
             rightYWeighted += y;
             rightInkCount++;
           }
+        }
+      }
+      if (rowMediumDark > (w * 0.62)) {
+        ruledRowCount++;
+      }
+    }
 
-          if (lumGrid[y * w + (x + 1)] < threshold) {
+    int horizontalNeighbors = 0;
+    int diagonalRightNeighbors = 0;
+    int diagonalLeftNeighbors = 0;
+
+    for (int y = 1; y < h - 1; y++) {
+      for (int x = 1; x < w - 1; x++) {
+        if (isInkMask[y * w + x] == 1) {
+          if (isInkMask[y * w + (x + 1)] == 1) {
             horizontalNeighbors++;
           }
-          if (lumGrid[(y - 1) * w + (x + 1)] < threshold) {
+          if (isInkMask[(y - 1) * w + (x + 1)] == 1) {
             diagonalRightNeighbors++;
           }
-          if (lumGrid[(y - 1) * w + (x - 1)] < threshold) {
+          if (isInkMask[(y - 1) * w + (x - 1)] == 1) {
             diagonalLeftNeighbors++;
           }
         }
@@ -167,13 +238,18 @@ class PixelGraphologyExtractor {
     }
 
     final inkPercent = (inkCount / totalPixels) * 100.0;
-    final isValid = inkPercent >= 0.15 && inkPercent <= 46.0 && meanSat <= 0.42;
+    final hasRuledLines = ruledRowCount >= 4 && ruledRowCount <= (h * 0.30);
+
+    final isValid = inkPercent >= 0.12 &&
+        inkPercent <= 48.0 &&
+        globalMeanLum >= 55.0 &&
+        meanSat <= 0.44;
 
     if (!isValid || inkCount == 0) {
       return PixelTelemetry(
         sha256Hash: hash,
         isValidInkSample: false,
-        invalidReasonKey: inkPercent < 0.15
+        invalidReasonKey: inkPercent < 0.12
             ? 'BLANK_OR_NO_INK'
             : 'NOT_A_DOCUMENT_OR_TOO_DARK',
         inkCoveragePercent: inkPercent,
@@ -190,11 +266,15 @@ class PixelGraphologyExtractor {
       );
     }
 
+    int upperCount = 0;
+    int middleCount = 0;
+    int lowerCount = 0;
+
     final boxHeight = math.max(1, maxY - minY);
     for (int y = minY; y <= maxY; y++) {
       final relY = (y - minY) / boxHeight;
       for (int x = minX; x <= maxX; x++) {
-        if (lumGrid[y * w + x] < threshold) {
+        if (isInkMask[y * w + x] == 1) {
           if (relY < 0.33) {
             upperCount++;
           } else if (relY < 0.67) {
@@ -252,6 +332,7 @@ class PixelGraphologyExtractor {
       rightMarginRatio: rightMargin,
       connectivityIndex: connectivity,
       strokeAngularityIndex: angularity,
+      hasRuledLines: hasRuledLines,
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,13 +33,45 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
     try {
       final file = await _picker.pickImage(
         source: source,
-        maxWidth: 1800,
-        imageQuality: 88,
+        maxWidth: 1600,
+        imageQuality: 86,
       );
       if (file == null) return;
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
       ref.read(hrAnalysisProvider.notifier).setImageBytes(bytes);
     } catch (_) {}
+  }
+
+  void _showImageZoomDialog(BuildContext context, Uint8List bytes) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black87,
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4.5,
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: IconButton.filledTonal(
+                onPressed: () => Navigator.of(ctx).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _submitAnalysis() async {
@@ -53,7 +86,9 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
         .runAnalysis(localeCode: localeCode);
 
     if (report != null && mounted) {
-      await ref.read(quotaProvider.notifier).consumeValidAnalysis();
+      if (report.isLiveAi) {
+        await ref.read(quotaProvider.notifier).consumeValidAnalysis();
+      }
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -83,6 +118,7 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final state = ref.watch(hrAnalysisProvider);
+    final lang = ref.watch(settingsProvider).languageCode;
     final isCompact = MediaQuery.of(context).size.width < 520;
 
     return SingleChildScrollView(
@@ -131,27 +167,41 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
                       const SizedBox(height: 10),
                       TextField(
                         controller: _candidateController,
+                        maxLength: 60,
                         onChanged: (val) => ref
                             .read(hrAnalysisProvider.notifier)
                             .setCandidateLabel(val),
                         decoration: InputDecoration(
+                          counterText: '',
                           hintText: l10n.candidateNameHint,
                           prefixIcon: const Icon(
                             Icons.badge_outlined,
                             color: JapandiColors.brassGold,
                           ),
+                          suffixIcon: _candidateController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _candidateController.clear();
+                                    ref
+                                        .read(hrAnalysisProvider.notifier)
+                                        .setCandidateLabel('');
+                                    setState(() {});
+                                  },
+                                )
+                              : null,
                           filled: true,
                           fillColor: theme.scaffoldBackgroundColor,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: JapandiColors.hairlineLight,
+                            borderSide: BorderSide(
+                              color: theme.colorScheme.outline,
                             ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: JapandiColors.hairlineLight,
+                            borderSide: BorderSide(
+                              color: theme.colorScheme.outline,
                             ),
                           ),
                         ),
@@ -171,7 +221,7 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
                             label: Text(_roleLabel(l10n, role)),
                             selected: selected,
                             selectedColor:
-                                JapandiColors.brassGold.withValues(alpha: 0.18),
+                                JapandiColors.brassGold.withValues(alpha: 0.22),
                             onSelected: (_) => ref
                                 .read(hrAnalysisProvider.notifier)
                                 .setTargetRole(role),
@@ -222,10 +272,17 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
                     .read(hrAnalysisProvider.notifier)
                     .setMode(AnalysisMode.combined),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Scientific HR Graphology Sample Collection Guide
+              _HrSamplingGuideCard(
+                locale: lang,
+                mode: state.mode,
+              ),
+              const SizedBox(height: 16),
 
               // Unified Photo Upload Card
-              _buildUploadCard(context, l10n, state),
+              _buildUploadCard(context, l10n, state, lang),
 
               // Rejection Error Banner if invalid sample
               if (state.rejectionError != null) ...[
@@ -287,6 +344,7 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
     BuildContext context,
     AppLocalizations l10n,
     HrAnalysisState state,
+    String lang,
   ) {
     final theme = Theme.of(context);
     final isSignatureOnly = state.mode == AnalysisMode.signature;
@@ -296,6 +354,10 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
     final cardHint = isSignatureOnly
         ? l10n.captureGuideSignature
         : l10n.captureGuideHandwriting;
+    final clearTooltip = lang == 'tr' ? 'Görseli Kaldır' : 'Remove Photo';
+    final zoomHint = lang == 'tr'
+        ? 'Okunaklılığı kontrol etmek için görsele dokunup yakınlaştırın'
+        : 'Tap image to zoom & inspect stroke clarity';
 
     return Card(
       child: Padding(
@@ -319,26 +381,67 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
                     ),
                   ),
                 ),
-                if (state.imageBytes != null)
+                if (state.imageBytes != null) ...[
                   const Icon(
                     Icons.check_circle,
                     color: JapandiColors.bambooGreenLight,
                     size: 20,
                   ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: clearTooltip,
+                    onPressed: () =>
+                        ref.read(hrAnalysisProvider.notifier).clearImage(),
+                    icon: Icon(
+                      Icons.close,
+                      size: 19,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 6),
             Text(cardHint, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 16),
             if (state.imageBytes != null) ...[
-              ClipRRect(
+              InkWell(
                 borderRadius: BorderRadius.circular(12),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  child: Image.memory(
-                    state.imageBytes!,
-                    fit: BoxFit.contain,
-                  ),
+                onTap: () => _showImageZoomDialog(context, state.imageBytes!),
+                child: Column(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: Image.memory(
+                          state.imageBytes!,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.zoom_in_outlined,
+                          size: 14,
+                          color: JapandiColors.brassGold,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            zoomHint,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: JapandiColors.brassGold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 14),
@@ -361,6 +464,61 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HrSamplingGuideCard extends StatelessWidget {
+  final String locale;
+  final AnalysisMode mode;
+
+  const _HrSamplingGuideCard({
+    required this.locale,
+    required this.mode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isTr = locale == 'tr';
+
+    final title = isTr
+        ? 'İK Mülakatı İçin Doğru El Yazısı Örneği Rehberi'
+        : 'HR Interview Handwriting Collection Protocol';
+
+    final body = isTr
+        ? '• Çizgisiz A4 Kağıt Standartı: Çizgili veya kareli defterler satır istikametini yapay olarak hizalar; adayın kendi iç düzenini ve enerji kontrolünü görmek için mülakatta çizgisiz beyaz A4 kağıt verin (çizgili not yüklenirse motorumuz bunu algılayıp çizgiyle kurulan ilişkiyi analiz eder).\n'
+            '• Doğaçlama İş Notu (6–10 Satır): Adaydan ezbere/kopyalanmış bir metin yerine "önceki rolündeki bir projeyi veya çalışma tarzını" kendi cümleleriyle yazıp altını imzalamasını isteyin.\n'
+            '• Mod Sınırı Uyarısı: ${mode == AnalysisMode.signature ? "Şu an seçili olan Sadece İmza modu yalnızca adayın dış otorite iddiasını ve mülakat maskesini ölçer; günlük iş takibi ve iç disiplin için El Yazısı + İmza modu önerilir." : "El Yazısı + İmza modu, adayın gerçek iş alışkanlığı ile mülakat vitrini arasındaki farkı yakalamak için en güvenilir moddur."}'
+        : '• Unlined A4 Paper Standard: Ruled notebook lines artificially stabilize baseline slope; provide unlined white A4 paper during interviews to observe authentic self-organization (if ruled notes are uploaded, our engine evaluates deviations relative to the rule).\n'
+            '• Spontaneous Prompt (6–10 Lines): Ask the candidate to briefly describe a recent project or workflow in their own words and sign beneath it rather than copying printed text.\n'
+            '• Mode Validity Note: ${mode == AnalysisMode.signature ? "Signature-Only mode measures projected authority and interview persona only; use Combined mode to assess daily operational discipline." : "Combined (Handwriting + Signature) mode provides the highest validity by contrasting daily execution habits against interview persona."}';
+
+    return Card(
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          leading: const Icon(
+            Icons.menu_book_outlined,
+            size: 19,
+            color: JapandiColors.brassGold,
+          ),
+          title: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          children: [
+            Text(
+              body,
+              style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
             ),
           ],
         ),
@@ -395,13 +553,12 @@ class _ModeCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         decoration: BoxDecoration(
           color: selected
-              ? JapandiColors.brassGold.withValues(alpha: 0.08)
+              ? JapandiColors.brassGold.withValues(alpha: 0.10)
               : theme.cardColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected
-                ? JapandiColors.brassGold
-                : JapandiColors.hairlineLight,
+            color:
+                selected ? JapandiColors.brassGold : theme.colorScheme.outline,
             width: selected ? 1.5 : 1.0,
           ),
         ),
@@ -411,7 +568,7 @@ class _ModeCard extends StatelessWidget {
               icon,
               color: selected
                   ? JapandiColors.brassGold
-                  : JapandiColors.inkSecondaryLight,
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.72),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -438,7 +595,7 @@ class _ModeCard extends StatelessWidget {
                   : Icons.radio_button_unchecked,
               color: selected
                   ? JapandiColors.brassGold
-                  : JapandiColors.hairlineLight,
+                  : theme.colorScheme.outline,
             ),
           ],
         ),

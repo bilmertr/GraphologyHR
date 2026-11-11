@@ -96,7 +96,7 @@ Future<void> showHrDisclaimerDialog(BuildContext context) async {
       backgroundColor: theme.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: JapandiColors.hairlineLight),
+        side: BorderSide(color: theme.colorScheme.outline),
       ),
       title: Row(
         children: [

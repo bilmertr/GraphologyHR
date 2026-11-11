@@ -5,6 +5,9 @@ class ApiConstants {
   static const String cloudflareWorkerUrl =
       'https://graphology.developer-6e8.workers.dev/analyze';
 
+  /// Client identifier header sent to the BFF
+  static const String clientHeaderValue = 'graphology-hr-v2';
+
   static const String geminiModelName = 'gemini-3.8-flash';
 
   static const Duration requestTimeout = Duration(seconds: 90);

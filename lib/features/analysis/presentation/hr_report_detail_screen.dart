@@ -38,6 +38,96 @@ class HrReportDetailScreen extends StatelessWidget {
     }
   }
 
+  String _emphasisMetricLabel(String locale) {
+    return switch (locale) {
+      'tr' => 'Vurgu & İşaretleme Dinamiği',
+      'de' => 'Betonung & Markierungsdynamik',
+      'es' => 'Énfasis y Marcas Operativas',
+      'da' => 'Fremhævelse & Markeringer',
+      'pt' => 'Ênfase e Marcações Operacionais',
+      'fr' => 'Soulignements & Gestes d\'Insistance',
+      'it' => 'Enfasi e Segni Operativi',
+      'nl' => 'Nadruk & Markeringen',
+      'sv' => 'Betoning & Markeringar',
+      _ => 'Emphasis & Prioritization Gestures',
+    };
+  }
+
+  String _copyTooltip(String locale) {
+    return switch (locale) {
+      'tr' => 'Raporu Kopyala',
+      'de' => 'Bericht kopieren',
+      'es' => 'Copiar informe',
+      'da' => 'Kopiér rapport',
+      'pt' => 'Copiar relatório',
+      'fr' => 'Copier le rapport',
+      'it' => 'Copia rapporto',
+      'nl' => 'Rapport kopiëren',
+      'sv' => 'Kopiera rapport',
+      _ => 'Copy Dossier',
+    };
+  }
+
+  String _shareTooltip(String locale) {
+    return switch (locale) {
+      'tr' => 'Raporu Paylaş',
+      'de' => 'Bericht teilen',
+      'es' => 'Compartir informe',
+      'da' => 'Del rapport',
+      'pt' => 'Partilhar relatório',
+      'fr' => 'Partager le rapport',
+      'it' => 'Condividi rapporto',
+      'nl' => 'Rapport delen',
+      'sv' => 'Dela rapport',
+      _ => 'Share Dossier',
+    };
+  }
+
+  String _copiedToast(String locale) {
+    return switch (locale) {
+      'tr' => 'İK aday değerlendirme raporu panoya kopyalandı.',
+      'de' => 'HR-Bewertungsbericht in die Zwischenablage kopiert.',
+      'es' => 'Informe de RR. HH. copiado al portapapeles.',
+      'da' => 'HR-rapport kopieret til udklipsholder.',
+      'pt' => 'Relatório de RH copiado para a área de transferência.',
+      'fr' => 'Rapport RH copié dans le presse-papiers.',
+      'it' => 'Rapporto HR copiato negli appunti.',
+      'nl' => 'HR-rapport gekopieerd naar klembord.',
+      'sv' => 'HR-rapport kopierad till urklipp.',
+      _ => 'HR candidate assessment copied to clipboard.',
+    };
+  }
+
+  String _engineBadgeLabel(String locale, bool isLiveAi) {
+    if (isLiveAi) {
+      return switch (locale) {
+        'tr' => 'Canlı Görsel AI',
+        'de' => 'Live-Vision-KI',
+        'es' => 'IA Visual en Vivo',
+        'fr' => 'IA Visuelle en Direct',
+        _ => 'Live AI Vision',
+      };
+    }
+    return switch (locale) {
+      'tr' => 'Çevrimdışı Geometrik Sentez',
+      'de' => 'Lokale Geometrie-Synthese',
+      'es' => 'Síntesis Geométrica Local',
+      'fr' => 'Synthèse Géométrique Locale',
+      _ => 'Offline Geometric Synthesis',
+    };
+  }
+
+  String _methodologyNote(String locale) {
+    return switch (locale) {
+      'tr' =>
+        'Bilimsel Grafoloji Metodoloji Notu: Bu rapor bütünsel (Gestalt) grafoloji ilkelerine dayanır; tekil bir harf veya çizgiye dayanarak kesin hüküm verilmez. Çizgili/kareli defter kullanımı satır istikametini dışarıdan yönlendirebilir; hızlı toplantı notları ve kalem ucu kalınlığı baskı algısını etkileyebilir. Tüm bulgular yapılandırılmış mülakat ve referans kontrolüyle birlikte değerlendirilmelidir.',
+      'de' =>
+        'Methodischer Hinweis: Dieser Bericht folgt ganzheitlichen (Gestalt-)Prinzipien der Graphologie. Liniertes Papier, Schreibtempo und Stiftart beeinflussen die Strichmechanik. Alle Hinweise sind im strukturierten Interview zu validieren.',
+      _ =>
+        'Scientific Graphology Methodology Note: This assessment applies holistic Gestalt graphology principles—no hiring hypothesis rests on an isolated stroke. Ruled paper artificially guides baseline alignment, while note-taking speed and pen nib type influence stroke pressure. Validate all behavioral hypotheses via structured interviews and reference checks.',
+    };
+  }
+
   String _formatShareText(AppLocalizations l10n) {
     final buffer = StringBuffer();
     buffer.writeln('=== ${l10n.appTitle}: ${l10n.reportSummaryTitle} ===');
@@ -85,6 +175,8 @@ class HrReportDetailScreen extends StatelessWidget {
     buffer.writeln();
     buffer.writeln(l10n.dimRedFlags);
     buffer.writeln(report.dimensions.redFlags);
+    buffer.writeln();
+    buffer.writeln('ℹ️ ${_methodologyNote(report.localeCode)}');
     return buffer.toString();
   }
 
@@ -107,8 +199,8 @@ class HrReportDetailScreen extends StatelessWidget {
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Rapor panoya kopyalandı / Copied to clipboard'),
+        SnackBar(
+          content: Text(_copiedToast(report.localeCode)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -120,6 +212,9 @@ class HrReportDetailScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final isCompact = MediaQuery.of(context).size.width < 520;
+    final eighthMetricLabel = report.mode == AnalysisMode.handwriting
+        ? _emphasisMetricLabel(report.localeCode)
+        : l10n.metricSignatureStyle;
 
     return Scaffold(
       appBar: AppBar(
@@ -130,12 +225,12 @@ class HrReportDetailScreen extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            tooltip: 'Copy',
+            tooltip: _copyTooltip(report.localeCode),
             onPressed: () => _copyReport(context, l10n),
             icon: const Icon(Icons.copy_all_outlined),
           ),
           IconButton(
-            tooltip: 'Share',
+            tooltip: _shareTooltip(report.localeCode),
             onPressed: () => _shareReport(context, l10n),
             icon: const Icon(
               Icons.share_outlined,
@@ -160,7 +255,7 @@ class HrReportDetailScreen extends StatelessWidget {
                   const HrDisclaimerBanner(),
                   const SizedBox(height: 16),
 
-                  // Candidate & Role Badges
+                  // Candidate, Role, Mode & Engine Source Badges
                   Wrap(
                     spacing: 10,
                     runSpacing: 8,
@@ -177,6 +272,15 @@ class HrReportDetailScreen extends StatelessWidget {
                       _BadgeChip(
                         icon: Icons.draw_outlined,
                         label: _modeLabel(l10n, report.mode),
+                      ),
+                      _BadgeChip(
+                        icon: report.isLiveAi
+                            ? Icons.visibility_outlined
+                            : Icons.cloud_off_outlined,
+                        label: _engineBadgeLabel(
+                          report.localeCode,
+                          report.isLiveAi,
+                        ),
                       ),
                     ],
                   ),
@@ -362,11 +466,46 @@ class HrReportDetailScreen extends StatelessWidget {
                               .trim()
                               .isNotEmpty)
                             _MetricRow(
-                              label: l10n.metricSignatureStyle,
+                              label: eighthMetricLabel,
                               value: report.observedMetrics.signatureGeometry,
                             ),
                         ],
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 6. Scientific Graphology Methodology Footnote
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: JapandiColors.brassGold,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _methodologyNote(report.localeCode),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              height: 1.48,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -399,12 +538,11 @@ class _BadgeChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: accent
-            ? JapandiColors.brassGold.withValues(alpha: 0.14)
-            : JapandiColors.warmLinen,
+            ? JapandiColors.brassGold.withValues(alpha: 0.16)
+            : theme.cardColor,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color:
-              accent ? JapandiColors.brassGold : JapandiColors.hairlineLight,
+          color: accent ? JapandiColors.brassGold : theme.colorScheme.outline,
         ),
       ),
       child: Row(
@@ -418,11 +556,13 @@ class _BadgeChip extends StatelessWidget {
                 : JapandiColors.bambooGreenLight,
           ),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: JapandiColors.inkPrimaryLight,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -489,7 +629,7 @@ class _NarrativeCard extends StatelessWidget {
         side: BorderSide(
           color: accentBorder
               ? JapandiColors.brassGold
-              : JapandiColors.hairlineLight,
+              : theme.colorScheme.outline,
           width: accentBorder ? 1.4 : 1.0,
         ),
       ),
@@ -546,8 +686,8 @@ class _DimensionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: isWarningCard
-              ? JapandiColors.terracottaClay.withValues(alpha: 0.55)
-              : JapandiColors.hairlineLight,
+              ? JapandiColors.terracottaClay.withValues(alpha: 0.65)
+              : theme.colorScheme.outline,
           width: isWarningCard ? 1.3 : 1.0,
         ),
       ),

@@ -94,7 +94,6 @@ class HrDimensions {
   });
 
   factory HrDimensions.fromJson(Map<String, dynamic> json) {
-    // Support both direct HR keys and fallback mapping from the 5-key Worker response
     final discipline = (json['discipline'] ?? json['work'] ?? '').toString();
     final manageability =
         (json['manageability'] ?? json['intellectual'] ?? '').toString();
@@ -102,10 +101,8 @@ class HrDimensions {
         (json['roleNature'] ?? json['social'] ?? '').toString();
     final resilience =
         (json['resilience'] ?? json['emotional'] ?? '').toString();
-    final teamEgo =
-        (json['teamEgo'] ?? json['social'] ?? '').toString();
-    final redFlags =
-        (json['redFlags'] ?? json['shadow'] ?? '').toString();
+    final teamEgo = (json['teamEgo'] ?? json['social'] ?? '').toString();
+    final redFlags = (json['redFlags'] ?? json['shadow'] ?? '').toString();
 
     return HrDimensions(
       discipline: discipline,
@@ -129,6 +126,7 @@ class HrDimensions {
 
 class HrCandidateReport {
   final String id;
+  final String imageHash;
   final DateTime createdAt;
   final AnalysisMode mode;
   final TargetRoleProfile targetRole;
@@ -139,9 +137,11 @@ class HrCandidateReport {
   final String executiveSummary;
   final String? comparativeSynthesis;
   final HrDimensions dimensions;
+  final bool isLiveAi;
 
   const HrCandidateReport({
     required this.id,
+    this.imageHash = '',
     required this.createdAt,
     required this.mode,
     required this.targetRole,
@@ -152,7 +152,29 @@ class HrCandidateReport {
     required this.executiveSummary,
     this.comparativeSynthesis,
     required this.dimensions,
+    this.isLiveAi = true,
   });
+
+  HrCandidateReport copyWithCandidateLabel(String newLabel) {
+    if (newLabel.trim().isEmpty || newLabel.trim() == candidateLabel) {
+      return this;
+    }
+    return HrCandidateReport(
+      id: id,
+      imageHash: imageHash,
+      createdAt: createdAt,
+      mode: mode,
+      targetRole: targetRole,
+      candidateLabel: newLabel.trim(),
+      localeCode: localeCode,
+      observedMetrics: observedMetrics,
+      corporateSpectrum: corporateSpectrum,
+      executiveSummary: executiveSummary,
+      comparativeSynthesis: comparativeSynthesis,
+      dimensions: dimensions,
+      isLiveAi: isLiveAi,
+    );
+  }
 
   factory HrCandidateReport.fromJson(Map<String, dynamic> json) {
     final modeName = (json['mode'] ?? 'handwriting').toString();
@@ -160,6 +182,7 @@ class HrCandidateReport {
 
     return HrCandidateReport(
       id: (json['id'] ?? '').toString(),
+      imageHash: (json['imageHash'] ?? '').toString(),
       createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
       mode: AnalysisMode.values.firstWhere(
@@ -183,11 +206,13 @@ class HrCandidateReport {
       dimensions: HrDimensions.fromJson(
         Map<String, dynamic>.from(json['dimensions'] ?? const {}),
       ),
+      isLiveAi: (json['isLiveAi'] as bool?) ?? true,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'imageHash': imageHash,
         'createdAt': createdAt.toIso8601String(),
         'mode': mode.name,
         'targetRole': targetRole.name,
@@ -198,5 +223,6 @@ class HrCandidateReport {
         'executiveSummary': executiveSummary,
         'comparativeSynthesis': comparativeSynthesis,
         'dimensions': dimensions.toJson(),
+        'isLiveAi': isLiveAi,
       };
 }

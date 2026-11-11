@@ -1,11 +1,11 @@
 {
-    "name": "graphology_hr",
-    "short_name": "graphology_hr",
+    "name": "Graphology HR — Kurumsal Aday Analizi",
+    "short_name": "Graphology HR",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F6F4EF",
+    "theme_color": "#F6F4EF",
+    "description": "Kurumsal işe alımlarda el yazısı ve imza mekaniği üzerinden iç disiplin, yönetilebilirlik, stres direnci ve rol uyumu karar destek sistemi.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
