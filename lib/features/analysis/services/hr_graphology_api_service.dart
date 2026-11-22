@@ -5,6 +5,7 @@ import 'package:image/image.dart' as img;
 import '../../../core/network/api_constants.dart';
 import '../models/analysis_mode.dart';
 import '../models/hr_candidate_report.dart';
+import '../utils/hr_text_formatter.dart';
 import 'pixel_graphology_extractor.dart';
 
 class GraphologyValidationException implements Exception {
@@ -171,7 +172,8 @@ class HrGraphologyApiService {
         '   - signature: Isolated signature reveals ONLY outer authority projection & interview persona; explicitly warn HR in "discipline" & "executiveSummary" to collect multi-line notes to verify daily work habits.\n'
         '   - handwriting: Analyze underlines/arrows/marks in observedMetrics.signatureStructure as operational emphasis gestures without calling them a signature ("imza"); set "comparativeSynthesis": "".\n'
         '   - combined: Contrast spontaneous working notes against public signature persona.\n'
-        '7. PUBLIC-FIGURE BLINDNESS & JSON SCHEMA: Ignore any famous/political name/title. Output "corporateSpectrum" {manageability,roleArchetype,resilience,discipline}, 6 "dimensions" {discipline,manageability,roleNature,resilience,teamEgo,redFlags (3 red flags + 3 interview questions)}, and "astroGraphologySynthesis": "".';
+        '7. PUBLIC-FIGURE BLINDNESS & JSON SCHEMA: Ignore any famous/political name/title. Output "corporateSpectrum" {manageability,roleArchetype,resilience,discipline}, 6 "dimensions" {discipline,manageability,roleNature,resilience,teamEgo,redFlags}, and "astroGraphologySynthesis": "".\n'
+        '8. RED FLAGS PARAGRAPH FORMATTING: Never write risks or questions inline on one line. Format "dimensions.redFlags" using "\\n\\n" breaks: a short risks heading, 3 numbered risk paragraphs (1., 2., 3.), a blank line, a short interview questions heading, and 3 numbered question paragraphs (1., 2., 3.).';
   }
 
   HrCandidateReport _parseAndEnrichWorkerResponse({
@@ -260,9 +262,11 @@ class HrGraphologyApiService {
         rawDims['teamEgo'] ?? rawDims['social'],
         fallback.dimensions.teamEgo,
       ),
-      redFlags: _nonEmpty(
-        rawDims['redFlags'] ?? rawDims['shadow'],
-        fallback.dimensions.redFlags,
+      redFlags: HrTextFormatter.formatRedFlags(
+        _nonEmpty(
+          rawDims['redFlags'] ?? rawDims['shadow'],
+          fallback.dimensions.redFlags,
+        ),
       ),
     );
 
@@ -412,11 +416,14 @@ class HrGraphologyApiService {
             'Yüksek performanslı ve net sorumluluk sahibi ekip arkadaşlarıyla uyumlu çalışırken, düşük tempolu veya dağınık profillere karşı tahammülsüzlük geliştirme potansiyeli vardır. '
             'Geri bildirim verirken yapıcı diplomasiyi koruyup korumadığı ekip içi huzur açısından kritik bir faktör olacaktır.',
         redFlags:
-            'Dikkat Edilmesi Gereken Potansiyel Riskler: (1) Kendi doğrusuna aşırı güvenerek ekip içi farklı yöntemlere kapalı kalma veya delegasyonda zorlanma eğilimi; (2) Yetki alanına müdahale edildiğinde veya mikro-yönetim altında motivasyon ve uyum kaybı riski; (3) Stres altında iletişimi fazla doğrudan ve sert kurarak kırıcı olma potansiyeli.\n'
-            'Mülakatta Sorulması Gereken Doğrulama Soruları:\n'
-            '• "Geçmişte yöneticinizin aldığı ancak sizin mantıksız veya verimsiz bulduğunuz bir kararda nasıl bir yol izlediniz, sonuç ne oldu?"\n'
-            '• "Sizin çalışma hızınıza ve kalite standardınıza yetişemeyen bir ekip üyesiyle aynı projede sorumluluk paylaştığınızda süreci nasıl yönettiniz?"\n'
-            '• "Tamamen belirsiz ve kuralları henüz yazılmamış kaotik bir projede ilk 30 günde ne yaparsınız, sizi en çok ne zorlar?"',
+            'Dikkat Edilmesi Gereken Potansiyel Riskler:\n\n'
+            '1. Kendi doğrusuna aşırı güvenerek ekip içi farklı yöntemlere kapalı kalma veya delegasyonda zorlanma eğilimi.\n\n'
+            '2. Yetki alanına müdahale edildiğinde veya mikro-yönetim altında motivasyon ve uyum kaybı riski.\n\n'
+            '3. Stres altında iletişimi fazla doğrudan ve sert kurarak kırıcı olma potansiyeli.\n\n'
+            'Mülakatta Sorulması Gereken Doğrulama Soruları:\n\n'
+            '1. "Geçmişte yöneticinizin aldığı ancak sizin mantıksız veya verimsiz bulduğunuz bir kararda nasıl bir yol izlediniz, sonuç ne oldu?"\n\n'
+            '2. "Sizin çalışma hızınıza ve kalite standardınıza yetişemeyen bir ekip üyesiyle aynı projede sorumluluk paylaştığınızda süreci nasıl yönettiniz?"\n\n'
+            '3. "Tamamen belirsiz ve kuralları henüz yazılmamış kaotik bir projede ilk 30 günde ne yaparsınız, sizi en çok ne zorlar?"',
       );
 
       return HrCandidateReport(
@@ -541,11 +548,14 @@ class HrGraphologyApiService {
             'When their domain expertise is challenged without data, defensive or overly critical responses are a potential risk. '
             'Peer collaboration should be evaluated for diplomatic flexibility during cross-functional disagreements.',
         redFlags:
-            'Potential Watch-Outs: (1) Risk of delegation hesitancy or impatience with slower team members; (2) Friction under heavy micro-management or ambiguous reporting lines; (3) Tendency toward overly blunt communication under prolonged KPI stress.\n'
-            'Recommended Behavioral Interview Questions:\n'
-            '• "Tell me about a time you strongly disagreed with a manager\'s directive—how did you handle it and what was the outcome?"\n'
-            '• "How do you manage shared deliverables when a colleague consistently fails to meet your pace or quality bar?"\n'
-            '• "Describe a situation where project priorities changed abruptly at the last minute—how did you adapt?"',
+            'Potential Watch-Outs:\n\n'
+            '1. Risk of delegation hesitancy or impatience with slower team members.\n\n'
+            '2. Friction under heavy micro-management or ambiguous reporting lines.\n\n'
+            '3. Tendency toward overly blunt communication under prolonged KPI stress.\n\n'
+            'Recommended Behavioral Interview Questions:\n\n'
+            '1. "Tell me about a time you strongly disagreed with a manager\'s directive—how did you handle it and what was the outcome?"\n\n'
+            '2. "How do you manage shared deliverables when a colleague consistently fails to meet your pace or quality bar?"\n\n'
+            '3. "Describe a situation where project priorities changed abruptly at the last minute—how did you adapt?"',
       ),
       isLiveAi: isLiveAi,
     );

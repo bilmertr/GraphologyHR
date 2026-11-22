@@ -5,6 +5,7 @@ import '../../../core/theme/japandi_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/analysis_mode.dart';
 import '../models/hr_candidate_report.dart';
+import '../utils/hr_text_formatter.dart';
 import 'hr_disclaimer_dialog.dart';
 
 class HrReportDetailScreen extends StatelessWidget {
@@ -178,7 +179,7 @@ class HrReportDetailScreen extends StatelessWidget {
     buffer.writeln(report.dimensions.teamEgo);
     buffer.writeln();
     buffer.writeln(l10n.dimRedFlags);
-    buffer.writeln(report.dimensions.redFlags);
+    buffer.writeln(HrTextFormatter.formatRedFlags(report.dimensions.redFlags));
     buffer.writeln();
     buffer.writeln('ℹ️ ${_methodologyNote(report.localeCode)}');
     return buffer.toString();
@@ -721,13 +722,80 @@ class _DimensionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text(
-              body,
-              style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
-            ),
+            if (isWarningCard)
+              _buildStructuredWarningBody(theme, body)
+            else
+              Text(
+                body,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+              ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStructuredWarningBody(ThemeData theme, String rawBody) {
+    final paragraphs = HrTextFormatter.splitParagraphs(rawBody);
+    final baseStyle = theme.textTheme.bodyMedium?.copyWith(height: 1.6);
+    if (paragraphs.isEmpty) {
+      return Text(rawBody, style: baseStyle);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < paragraphs.length; i++)
+          _buildWarningParagraph(theme, baseStyle, paragraphs[i], i),
+      ],
+    );
+  }
+
+  Widget _buildWarningParagraph(
+    ThemeData theme,
+    TextStyle? baseStyle,
+    String paragraph,
+    int index,
+  ) {
+    if (HrTextFormatter.isSectionHeading(paragraph)) {
+      final headingColor = HrTextFormatter.isInterviewHeading(paragraph)
+          ? JapandiColors.brassGold
+          : JapandiColors.terracottaClay;
+      return Padding(
+        padding: EdgeInsets.only(top: index == 0 ? 0 : 16, bottom: 2),
+        child: Text(
+          paragraph,
+          style: baseStyle?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: headingColor,
+          ),
+        ),
+      );
+    }
+
+    final colonIndex = paragraph.indexOf(':');
+    final hasLeadIn = !paragraph.startsWith('"') &&
+        !paragraph.startsWith('“') &&
+        colonIndex >= 4 &&
+        colonIndex <= 68 &&
+        colonIndex + 1 < paragraph.length;
+
+    return Padding(
+      padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
+      child: hasLeadIn
+          ? Text.rich(
+              TextSpan(
+                style: baseStyle,
+                children: [
+                  TextSpan(
+                    text: paragraph.substring(0, colonIndex + 1),
+                    style: baseStyle?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  TextSpan(text: paragraph.substring(colonIndex + 1)),
+                ],
+              ),
+            )
+          : Text(paragraph, style: baseStyle),
     );
   }
 }
