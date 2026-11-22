@@ -10,34 +10,81 @@ import 'hr_report_detail_screen.dart';
 class HrArchiveScreen extends ConsumerWidget {
   const HrArchiveScreen({super.key});
 
+  String _clearAllLabel(String lang) => switch (lang) {
+        'tr' => 'Arşivi Temizle',
+        'da' => 'Ryd arkiv',
+        'de' => 'Alle löschen',
+        _ => 'Clear All',
+      };
+
+  String _deleteTooltip(String lang) => switch (lang) {
+        'tr' => 'Kaydı Sil',
+        'da' => 'Slet rapport',
+        'de' => 'Löschen',
+        _ => 'Delete',
+      };
+
+  String _localPrivacyNotice(String lang) => switch (lang) {
+        'tr' =>
+          'Sıfır Sunucu Kaydı: Bu listedeki raporlar yalnızca bu tarayıcı/cihazın yerel belleğinde tutulur, sunucularımızda saklanmaz. İstediğiniz an tek tıkla silebilirsiniz.',
+        'da' =>
+          'Nul serverlagring (GDPR): Rapporterne her gemmes kun lokalt i denne browser/enhed og aldrig på eksterne servere. Du kan slette dem når som helst.',
+        'de' =>
+          'Keine Serverspeicherung (DSGVO): Diese Berichte werden ausschließlich lokal auf diesem Gerät gespeichert, niemals auf unseren Servern.',
+        _ =>
+          'Zero Server Retention (GDPR): Reports shown here are stored strictly inside this browser/device\'s local storage—never on remote servers—and can be cleared anytime.',
+      };
+
   Future<void> _confirmClearAll(
     BuildContext context,
     WidgetRef ref,
     String lang,
   ) async {
-    final isTr = lang == 'tr';
+    final title = switch (lang) {
+      'tr' => 'Yerel İK Arşivini Temizle',
+      'da' => 'Ryd lokalt HR-arkiv',
+      'de' => 'Lokales HR-Archiv löschen',
+      _ => 'Clear Local HR Archive',
+    };
+    final body = switch (lang) {
+      'tr' =>
+        'Bu tarayıcıda/cihazda saklanan tüm aday değerlendirme kayıtları kalıcı olarak silinecektir. Onaylıyor musunuz?',
+      'da' =>
+        'Alle kandidatvurderinger gemt lokalt på denne enhed slettes permanent. Vil du fortsætte?',
+      'de' =>
+        'Alle lokal auf diesem Gerät gespeicherten Kandidatenberichte werden dauerhaft gelöscht. Fortfahren?',
+      _ =>
+        'All candidate assessment dossiers stored locally on this device will be permanently deleted. Continue?',
+    };
+    final cancelLabel = switch (lang) {
+      'tr' => 'Vazgeç',
+      'da' => 'Annuller',
+      'de' => 'Abbrechen',
+      _ => 'Cancel',
+    };
+    final confirmLabel = switch (lang) {
+      'tr' => 'Tümünü Sil',
+      'da' => 'Slet alle',
+      'de' => 'Alle löschen',
+      _ => 'Delete All',
+    };
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(
-          isTr ? 'Yerel İK Arşivini Temizle' : 'Clear Local HR Archive',
-        ),
-        content: Text(
-          isTr
-              ? 'Bu tarayıcıda/cihazda saklanan tüm aday değerlendirme kayıtları kalıcı olarak silinecektir. Onaylıyor musunuz?'
-              : 'All candidate assessment dossiers stored locally on this device will be permanently deleted. Continue?',
-        ),
+        title: Text(title),
+        content: Text(body),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(isTr ? 'Vazgeç' : 'Cancel'),
+            child: Text(cancelLabel),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: JapandiColors.terracottaClay,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(isTr ? 'Tümünü Sil' : 'Delete All'),
+            child: Text(confirmLabel),
           ),
         ],
       ),
@@ -54,7 +101,6 @@ class HrArchiveScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final reports = ref.watch(hrAnalysisProvider).archivedReports;
     final lang = ref.watch(settingsProvider).languageCode;
-    final isTr = lang == 'tr';
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -81,7 +127,7 @@ class HrArchiveScreen extends ConsumerWidget {
                         color: JapandiColors.terracottaClay,
                       ),
                       label: Text(
-                        isTr ? 'Arşivi Temizle' : 'Clear All',
+                        _clearAllLabel(lang),
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: JapandiColors.terracottaClay,
                           fontWeight: FontWeight.w600,
@@ -89,6 +135,39 @@ class HrArchiveScreen extends ConsumerWidget {
                       ),
                     ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: JapandiColors.bambooGreen.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: JapandiColors.bambooGreen.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 1),
+                      child: Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: JapandiColors.bambooGreenLight,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _localPrivacyNotice(lang),
+                        style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -135,7 +214,7 @@ class HrArchiveScreen extends ConsumerWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    tooltip: isTr ? 'Kaydı Sil' : 'Delete',
+                                    tooltip: _deleteTooltip(lang),
                                     icon: Icon(
                                       Icons.delete_outline,
                                       size: 20,

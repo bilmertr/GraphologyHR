@@ -1,13 +1,14 @@
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppSettingsState {
   static const List<String> supportedLanguageCodes = [
-    'tr',
     'en',
+    'tr',
+    'da',
     'de',
     'es',
-    'da',
     'pt',
     'fr',
     'it',
@@ -15,11 +16,24 @@ class AppSettingsState {
     'sv',
   ];
 
+  static const Map<String, String> languageDisplayNames = {
+    'en': 'English',
+    'tr': 'Türkçe',
+    'da': 'Dansk',
+    'de': 'Deutsch',
+    'es': 'Español',
+    'pt': 'Português',
+    'fr': 'Français',
+    'it': 'Italiano',
+    'nl': 'Nederlands',
+    'sv': 'Svenska',
+  };
+
   final String languageCode;
   final bool isDarkMode;
 
   const AppSettingsState({
-    this.languageCode = 'tr',
+    this.languageCode = 'en',
     this.isDarkMode = false,
   });
 
@@ -47,10 +61,40 @@ class SettingsNotifier extends StateNotifier<AppSettingsState> {
   SettingsNotifier(this._prefs)
       : super(
           AppSettingsState(
-            languageCode: _prefs.getString(_keyLang) ?? 'tr',
+            languageCode: resolveInitialLanguageCode(_prefs),
             isDarkMode: _prefs.getBool(_keyDark) ?? false,
           ),
         );
+
+  /// Resolves the initial UI & report language in priority order:
+  /// 1. Explicit URL query parameter `?lang=en` / `?lang=da` / `?lang=tr`
+  /// 2. Persisted user preference in local storage
+  /// 3. Browser / OS locale if supported, otherwise international English ('en')
+  static String resolveInitialLanguageCode(SharedPreferences prefs) {
+    try {
+      final queryLang = Uri.base.queryParameters['lang']?.trim().toLowerCase();
+      if (queryLang != null &&
+          AppSettingsState.supportedLanguageCodes.contains(queryLang)) {
+        return queryLang;
+      }
+    } catch (_) {}
+
+    final saved = prefs.getString(_keyLang)?.trim().toLowerCase();
+    if (saved != null &&
+        AppSettingsState.supportedLanguageCodes.contains(saved)) {
+      return saved;
+    }
+
+    try {
+      final deviceLang =
+          PlatformDispatcher.instance.locale.languageCode.toLowerCase();
+      if (AppSettingsState.supportedLanguageCodes.contains(deviceLang)) {
+        return deviceLang;
+      }
+    } catch (_) {}
+
+    return 'en';
+  }
 
   Future<void> setLanguage(String code) async {
     if (!AppSettingsState.supportedLanguageCodes.contains(code)) return;

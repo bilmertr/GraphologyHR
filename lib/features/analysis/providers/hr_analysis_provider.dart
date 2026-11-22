@@ -14,6 +14,7 @@ class HrAnalysisState {
   final bool isLoading;
   final HrCandidateReport? activeReport;
   final String? rejectionError;
+  final String? rejectionMessage;
   final List<HrCandidateReport> archivedReports;
 
   const HrAnalysisState({
@@ -24,6 +25,7 @@ class HrAnalysisState {
     this.isLoading = false,
     this.activeReport,
     this.rejectionError,
+    this.rejectionMessage,
     this.archivedReports = const [],
   });
 
@@ -38,6 +40,7 @@ class HrAnalysisState {
     bool? isLoading,
     HrCandidateReport? activeReport,
     String? rejectionError,
+    String? rejectionMessage,
     bool clearError = false,
     List<HrCandidateReport>? archivedReports,
   }) {
@@ -50,6 +53,8 @@ class HrAnalysisState {
       activeReport: activeReport ?? this.activeReport,
       rejectionError:
           clearError ? null : (rejectionError ?? this.rejectionError),
+      rejectionMessage:
+          clearError ? null : (rejectionMessage ?? this.rejectionMessage),
       archivedReports: archivedReports ?? this.archivedReports,
     );
   }
@@ -154,12 +159,14 @@ class HrAnalysisNotifier extends StateNotifier<HrAnalysisState> {
       state = state.copyWith(
         isLoading: false,
         rejectionError: e.reasonKey,
+        rejectionMessage: e.customMessage,
       );
       return null;
     } catch (_) {
       state = state.copyWith(
         isLoading: false,
         rejectionError: 'INVALID_SAMPLE',
+        rejectionMessage: null,
       );
       return null;
     }

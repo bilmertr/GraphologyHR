@@ -128,7 +128,11 @@ Future<void> showHrDisclaimerDialog(BuildContext context) async {
             const SizedBox(height: 16),
             InkWell(
               onTap: () async {
-                final uri = Uri.parse(ApiConstants.officialDisclaimerUrl);
+                final lang = Localizations.localeOf(context).languageCode;
+                final targetUrl = lang == 'tr'
+                    ? ApiConstants.officialDisclaimerUrl
+                    : '${ApiConstants.officialDisclaimerUrl}#en';
+                final uri = Uri.parse(targetUrl);
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
               },
               child: Row(
@@ -141,7 +145,9 @@ Future<void> showHrDisclaimerDialog(BuildContext context) async {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      ApiConstants.officialDisclaimerUrl,
+                      Localizations.localeOf(context).languageCode == 'tr'
+                          ? ApiConstants.officialDisclaimerUrl
+                          : '${ApiConstants.officialDisclaimerUrl}#en',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: JapandiColors.brassGold,
                         decoration: TextDecoration.underline,

@@ -240,16 +240,16 @@ class PixelGraphologyExtractor {
     final inkPercent = (inkCount / totalPixels) * 100.0;
     final hasRuledLines = ruledRowCount >= 4 && ruledRowCount <= (h * 0.30);
 
-    final isValid = inkPercent >= 0.12 &&
+    final isValid = inkPercent >= 0.08 &&
         inkPercent <= 48.0 &&
-        globalMeanLum >= 55.0 &&
-        meanSat <= 0.44;
+        globalMeanLum >= 50.0 &&
+        meanSat <= 0.56;
 
     if (!isValid || inkCount == 0) {
       return PixelTelemetry(
         sha256Hash: hash,
         isValidInkSample: false,
-        invalidReasonKey: inkPercent < 0.12
+        invalidReasonKey: inkPercent < 0.08
             ? 'BLANK_OR_NO_INK'
             : 'NOT_A_DOCUMENT_OR_TOO_DARK',
         inkCoveragePercent: inkPercent,

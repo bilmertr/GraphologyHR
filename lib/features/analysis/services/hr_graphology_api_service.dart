@@ -9,7 +9,8 @@ import 'pixel_graphology_extractor.dart';
 
 class GraphologyValidationException implements Exception {
   final String reasonKey;
-  const GraphologyValidationException(this.reasonKey);
+  final String? customMessage;
+  const GraphologyValidationException(this.reasonKey, {this.customMessage});
 }
 
 class HrGraphologyApiService {
@@ -42,16 +43,18 @@ class HrGraphologyApiService {
     return cleaned.length > 60 ? cleaned.substring(0, 60).trim() : cleaned;
   }
 
-  /// Compresses and normalizes image bytes to a lightweight JPEG (max 1024px)
-  /// so the Cloudflare Worker + Gemini Vision call responds reliably.
+  /// Compresses and normalizes image bytes to a lightweight JPEG (longest edge max 1280px)
+  /// so smartphone portrait/landscape photos preserve crisp strokes and upload reliably.
   Uint8List _optimizeForUpload(Uint8List rawBytes) {
     try {
       final decoded = img.decodeImage(rawBytes);
       if (decoded == null) return rawBytes;
-      final resized = decoded.width > 1024
-          ? img.copyResize(decoded, width: 1024)
+      final resized = (decoded.width > 1280 || decoded.height > 1280)
+          ? (decoded.width >= decoded.height
+              ? img.copyResize(decoded, width: 1280)
+              : img.copyResize(decoded, height: 1280))
           : decoded;
-      return Uint8List.fromList(img.encodeJpg(resized, quality: 82));
+      return Uint8List.fromList(img.encodeJpg(resized, quality: 84));
     } catch (_) {
       return rawBytes;
     }
@@ -88,7 +91,10 @@ class HrGraphologyApiService {
         'targetRole': targetRole.name,
         'candidateRef': normalizedCandidate,
         'locale': localeCode,
-        'handwritingImageBase64': encodedImage,
+        if (mode == AnalysisMode.signature)
+          'signatureImageBase64': encodedImage
+        else
+          'handwritingImageBase64': encodedImage,
         'includeAstroSynthesis': false,
         'pixelTelemetry': telemetry.toJson(),
         'styleDirective': _buildHrStyleDirective(
@@ -114,7 +120,11 @@ class HrGraphologyApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         if (data['isValidSample'] == false || data['validSample'] == false) {
-          throw const GraphologyValidationException('AI_REJECTED_NON_INK');
+          final reason = (data['rejectionReason'] ?? '').toString().trim();
+          throw GraphologyValidationException(
+            'AI_REJECTED_NON_INK',
+            customMessage: reason.isNotEmpty ? reason : null,
+          );
         }
         if (data['executiveSummary'] != null && data['dimensions'] != null) {
           return _parseAndEnrichWorkerResponse(
@@ -151,18 +161,17 @@ class HrGraphologyApiService {
     required bool hasRuledLines,
   }) {
     return 'IMPORTANT OVERRIDE — CORPORATE HR & TALENT ACQUISITION EDITION (Language: $localeCode, Candidate Ref: $candidateLabel, Target Role Profile: ${targetRole.name}):\n'
-        'You are acting as an incisive, realistic Senior Corporate HR & Organizational Behavior Graphology Assessor evaluating a job candidate from their handwriting/notes/signature.\n'
+        'You are an incisive, realistic Senior Corporate HR & Organizational Behavior Graphology Assessor.\n'
         '1. ZERO ASTROLOGY & ZERO RAW NUMBERS: Never mention astrology/zodiac signs, and never output raw degree (°) or percentage (%) numbers.\n'
-        '2. INCISIVE, REALISTIC, UNVARNISHED HR TONE — YET PROBABILISTIC & GESTALT-GROUNDED: Be significantly more candid and realistic than a consumer app ("pembe tablo çizme"). Surface corporate friction points honestly: authority resistance, micro-management intolerance, delegation anxiety, ego defensiveness, organizational scatter, or fragility under KPI stress. HOWEVER, follow holistic Gestalt graphology (never judge from a single isolated sign) and frame all findings strictly as behavioral tendencies, probabilities, and hypotheses to verify in structured interviews.\n'
-        '3. PAPER SUPPORT & INSTRUMENT CONTEXT (CV Ruled-Paper Flag: $hasRuledLines): Inspect whether the sample is on UNLINED paper or RULED/LINED notebook paper (possibly with a vertical margin rule). On ruled paper, horizontal lines artificially guide the baseline — do NOT mistake printed line alignment for exceptional internal baseline stability; instead evaluate how the candidate relates to the printed rule (clinging rigidly, riding above, cutting below, or ignoring the margin rule) and account for rapid working notes vs. slow formal script.\n'
-        '4. MODE-SPECIFIC GRAPHOLOGICAL VALIDITY (Current mode: "${mode.name}"):\n'
-        '   - If mode is "signature" (isolated signature without multi-line text): In scientific graphology, an isolated signature reveals ONLY external authority projection, ambition, and interview persona/ego shield — it CANNOT directly confirm day-to-day operational follow-through or routine organization. Explicitly warn HR inside "discipline" and "executiveSummary" that multi-line handwriting notes should be requested to verify actual daily execution habits!\n'
-        '   - If mode is "handwriting" (no standalone signature): Use observedMetrics.signatureStructure strictly to analyze underlining (straight/wavy), exclamation marks, arrows, and numeric target framing as operational prioritization gestures WITHOUT calling them an official signature ("imza"), and set "comparativeSynthesis": "".\n'
-        '5. PUBLIC-FIGURE IDENTITY BLINDNESS: Ignore any famous/political identity in the text or signature; treat strictly as an anonymous candidate.\n'
-        '6. JSON OUTPUT KEYS MANDATE:\n'
-        '   - Include "corporateSpectrum": { "manageability": "...", "roleArchetype": "...", "resilience": "...", "discipline": "..." }\n'
-        '   - Inside "dimensions", output ONLY these 6 keys (each 4-6 complete analytical sentences): "discipline", "manageability", "roleNature", "resilience", "teamEgo", and "redFlags" (3 concrete hiring watch-outs + 3 tailored behavioral interview probing questions).\n'
-        '   - Set "astroGraphologySynthesis": "".';
+        '2. CONTENT-BLIND GRAPHIC MECHANICS (CRITICAL): Never infer personality traits, domain aptitudes, or career interests from the semantic meaning/topic of written words (e.g., notes mentioning "AI", "digital", "sales", or "finance"); ground 100% of observations in physical pen mechanics (pressure, slant, baseline, rhythm, zonal balance, margins, spacing).\n'
+        '3. KLAGES FORM-LEVEL & PRINT-SCRIPT AWARENESS: Judge every stroke indicator via holistic Gestalt & Formniveau rhythm, never in isolation. Do NOT penalize modern corporate print-script (disconnected block letters) as rigid solely for lacking cursive loops; evaluate letter-groupings, spacing rhythm, and stroke economy.\n'
+        '4. CANDID YET PROBABILISTIC HR TONE: Be realistic ("pembe tablo çizme")—surface authority friction, micro-management intolerance, delegation anxiety, ego defensiveness, or KPI fragility honestly, framed strictly as testable interview hypotheses rather than deterministic verdicts.\n'
+        '5. PAPER SUPPORT & INSTRUMENT (CV Ruled-Paper Flag: $hasRuledLines): On ruled paper, printed lines guide the baseline artificially—analyze adherence or deviations relative to the printed rules/margin rather than praising straight lines; weigh spontaneous working notes vs. slow formal script.\n'
+        '6. MODE VALIDITY ("${mode.name}"):\n'
+        '   - signature: Isolated signature reveals ONLY outer authority projection & interview persona; explicitly warn HR in "discipline" & "executiveSummary" to collect multi-line notes to verify daily work habits.\n'
+        '   - handwriting: Analyze underlines/arrows/marks in observedMetrics.signatureStructure as operational emphasis gestures without calling them a signature ("imza"); set "comparativeSynthesis": "".\n'
+        '   - combined: Contrast spontaneous working notes against public signature persona.\n'
+        '7. PUBLIC-FIGURE BLINDNESS & JSON SCHEMA: Ignore any famous/political name/title. Output "corporateSpectrum" {manageability,roleArchetype,resilience,discipline}, 6 "dimensions" {discipline,manageability,roleNature,resilience,teamEgo,redFlags (3 red flags + 3 interview questions)}, and "astroGraphologySynthesis": "".';
   }
 
   HrCandidateReport _parseAndEnrichWorkerResponse({
@@ -427,45 +436,59 @@ class HrGraphologyApiService {
       );
     }
 
-    // English & International Fallback
+    // English & International Fallback (dynamically anchored to measured telemetry)
     final baselineEn = telemetry.hasRuledLines
-        ? 'Ruled-paper guided baseline alignment indicating structured adherence to external frameworks, with occasional upward stroke energy reflecting personal drive.'
+        ? 'Ruled-paper guided baseline alignment indicating structured adherence to external frameworks, with subtle deviations relative to the printed rule reflecting personal pacing.'
         : (isAscending
             ? 'Upward-trending baseline on unlined space pointing to goal-oriented ambition and initiative, with a potential risk of impatience during slow bureaucratic routines.'
-            : 'Steady horizontal baseline alignment reflecting procedural consistency, methodical pacing, and emotional containment across daily deliverables.');
+            : (isDescending
+                ? 'Slightly descending baseline toward line endings on unlined paper, suggesting vulnerability to stamina fatigue or shifting focus under prolonged ambiguity.'
+                : 'Steady horizontal baseline alignment on unlined space reflecting procedural consistency, methodical pacing, and emotional containment across daily deliverables.'));
 
     final observedEn = ObservedGraphologyMetrics(
       slant: isRightSlant
           ? 'Forward-leaning stroke flow indicating strong operational drive, external responsiveness, and a tendency to push for rapid execution.'
-          : 'Controlled vertical-to-measured stroke stance reflecting emotional restraint, analytical distance, and selective compliance in corporate workflows.',
+          : (isLeftOrVertical
+              ? 'Controlled vertical-to-measured stroke stance reflecting emotional restraint, analytical distance, and selective compliance in corporate workflows.'
+              : 'Balanced stroke slant suggesting a measured equilibrium between interpersonal responsiveness and analytical self-control.'),
       pressure: isFirmPressure
           ? 'Firm, decisive pen pressure into the paper surface, signaling strong willpower and stamina under pressure, paired with a tendency toward stubbornness when challenged.'
-          : 'Measured-to-adaptive stroke pressure suggesting cognitive agility, though potentially vulnerable to energy depletion in prolonged high-conflict environments.',
+          : (isLightPressure
+              ? 'Light, adaptive stroke pressure suggesting cognitive agility, though potentially vulnerable to energy depletion in prolonged high-conflict environments.'
+              : 'Balanced medium stroke pressure reflecting steady day-to-day operational stamina without rigid muscular tension.'),
       baseline: baselineEn,
-      size:
-          'Compact, function-oriented letter proportions prioritizing concrete operational execution and factual clarity over decorative self-presentation.',
-      zones:
-          'Balanced upper-to-middle zone distribution combining conceptual planning with day-to-day practical task implementation.',
+      size: telemetry.middleZoneRatio >= 0.42
+          ? 'Compact, middle-zone oriented letter proportions prioritizing concrete operational execution and factual clarity over decorative self-presentation.'
+          : 'Expanded stroke proportions with pronounced vertical extensions, balancing broad conceptual framing with a desire for visible autonomy.',
+      zones: telemetry.upperZoneRatio >= telemetry.lowerZoneRatio
+          ? 'Upper-to-middle zone emphasis combining conceptual planning and structured coordination with practical task implementation.'
+          : 'Middle-to-lower zone emphasis highlighting pragmatic execution, tangible output tracking, and hands-on field follow-through.',
       connectivity: isConnected
           ? 'Continuous, linked stroke transitions indicating sequential cause-and-effect reasoning and structured follow-through.'
-          : 'Segmented stroke transitions combined with deliberate spacing, indicating rapid intuitive problem-solving paired with a preference for operational autonomy.',
-      marginsAndSpacing:
-          'Deliberate left-margin alignment and clear vertical spacing demonstrating structured prioritization, time awareness, and firm personal boundaries.',
+          : 'Segmented print-script transitions combined with deliberate spacing, indicating rapid analytical sorting and a preference for operational autonomy.',
+      marginsAndSpacing: isWideMargin
+          ? 'Deliberate margin alignment and structured spacing demonstrating clear prioritization, time awareness, and firm personal boundaries.'
+          : 'Dense page utilization reflecting high agenda throughput and broad task engagement, alongside a watch-out for overcommitment when priorities collide.',
       signatureGeometry: mode == AnalysisMode.handwriting
-          ? 'While no standalone formal signature is present, decisive underlining, exclamation marks, and target framing act as operational emphasis gestures demanding clarity and execution focus.'
+          ? 'While no standalone formal signature is present, decisive underlining, exclamation marks, and framing gestures act as operational prioritization signals.'
           : 'Structured signature geometry projecting a composed, self-reliant professional persona that guards internal vulnerabilities closely.',
     );
 
     final spectrumEn = CorporateSpectrum(
-      manageability:
-          'Selective & Rational Compliance: Tends to align well when objectives and rationale are transparent, but carries a risk of internal resistance or disengagement under rigid micro-management.',
-      roleArchetype:
-          'Hands-On Operational Driver (Doer / Directive Executor): Strongly oriented toward tangible delivery and structured execution rather than superficial self-promotion.',
-      resilience:
-          'Task-Resilient with Defensive Guardrails: Maintains operational focus under deadline stress, though prolonged organizational ambiguity may trigger guarded or overly blunt communication.',
+      manageability: isAngular && !isConnected
+          ? 'Independent Initiative & Selective Compliance: Aligns well when KPI rationale is transparent, yet carries an elevated risk of quiet resistance under rigid micro-management.'
+          : 'Structured Corporate Alignment: Readily operates within defined workflows and reporting standards, though heavy bureaucracy may dampen autonomous speed.',
+      roleArchetype: isFirmPressure && isAscending
+          ? 'Directive Driver & Results Enforcer: Strongly drives milestones and challenges bottlenecks directly, risking impatience with slower-paced stakeholders.'
+          : 'Hands-On Operational Executor (Doer): Focuses on reliable delivery and methodical execution over theatrical visibility.',
+      resilience: isFirmPressure && !isDescending
+          ? 'High Task Resilience (Directness Risk Under Strain): Maintains focus and willpower during high-pressure sprints, though prolonged stress may surface as blunt, demanding communication.'
+          : 'Measured Endurance with Fragility Watch-Out: Performs steadily in clearly scoped environments, yet chronic ambiguity or harsh political conflict risks mental fatigue.',
       discipline: isSignatureOnly
           ? 'External Ambition Projection (Signature-Only Scope): Isolated signature strokes reflect outward authority posture; multi-line handwriting is recommended to confirm daily operational follow-through.'
-          : 'High Internal Structure & Prioritization: Demonstrates strong self-organization and target tracking, with a low tolerance for chaotic or poorly defined workflows.',
+          : (isWideMargin && !isDescending
+              ? 'High Internal Structure & Prioritization: Demonstrates strong self-organization and target tracking, with a low tolerance for chaotic workflows.'
+              : 'Flexible / Milestone-Guided Structure: Responds briskly to urgent priorities while benefiting from explicit long-term check-ins on multi-stakeholder timelines.'),
     );
 
     return HrCandidateReport(
@@ -479,8 +502,8 @@ class HrGraphologyApiService {
       observedMetrics: observedEn,
       corporateSpectrum: spectrumEn,
       executiveSummary:
-          'The analyzed stroke mechanics ($candidateLabel) point to a candidate profile defined by structured execution habits alongside distinct autonomy boundaries that require thoughtful management. '
-          'Rather than projecting passive compliance, the physical stroke pressure and spatial layout suggest an individual who actively structures their workload and expects rationality and clarity from leadership.'
+          'The analyzed stroke mechanics ($candidateLabel) point to a candidate profile defined by ${isWideMargin && !isDescending ? "structured execution habits" : "adaptive execution pacing"} alongside distinct autonomy boundaries that require thoughtful management. '
+          'Rather than projecting passive compliance, the ${isFirmPressure ? "firm stroke pressure" : "controlled stroke rhythm"} and spatial layout suggest an individual who ${isAngular && !isConnected ? "actively defines personal standards" : "works within systematic frameworks"} and expects rationality from leadership.'
           '${isSignatureOnly ? " Note: Per classical graphology principles, an isolated signature reflects interview persona and authority projection rather than daily routine execution; pair with a handwriting sample for full operational verification." : ""}\n\n'
           'From a talent acquisition perspective, this profile is most likely to thrive in roles with clear accountability metrics and operational ownership. '
           'Conversely, environments characterized by heavy micro-management, shifting political priorities, or vague authority lines carry a heightened risk of friction, impatience, or defensive withdrawal.',

@@ -8,19 +8,6 @@ import '../providers/settings_provider.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  static const Map<String, String> _languageNames = {
-    'tr': 'Türkçe',
-    'en': 'English',
-    'de': 'Deutsch',
-    'es': 'Español',
-    'da': 'Dansk',
-    'pt': 'Português',
-    'fr': 'Français',
-    'it': 'Italiano',
-    'nl': 'Nederlands',
-    'sv': 'Svenska',
-  };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
@@ -142,7 +129,7 @@ class SettingsScreen extends ConsumerWidget {
                                 : JapandiColors.hairlineLight,
                           ),
                           title: Text(
-                            _languageNames[code] ?? code,
+                            AppSettingsState.languageDisplayNames[code] ?? code,
                             style: theme.textTheme.bodyLarge?.copyWith(
                               fontWeight: isSelected
                                   ? FontWeight.w700

@@ -32,10 +32,16 @@ Uint8List _createHandwritingNoteImage() {
 
 void main() {
   testWidgets(
-      'Graphology HR renders corporate studio, hides paywall badge, shows HR disclaimer, and supports all 10 languages',
+      'Graphology HR defaults cleanly to browser/English locale, renders quick language switcher, hides paywall, and supports all 10 languages',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+
+    // Verify smart initial language resolution
+    expect(SettingsNotifier.resolveInitialLanguageCode(prefs), 'en');
+    await prefs.setString('hr_graphology_lang', 'da');
+    expect(SettingsNotifier.resolveInitialLanguageCode(prefs), 'da');
+    await prefs.remove('hr_graphology_lang');
 
     // Verify paywall is kept in infrastructure but hidden in UI
     expect(ApiConstants.enablePaywallInUi, isFalse);
@@ -50,20 +56,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify Turkish default title and HR disclaimer banner are visible
+    // Verify English default UI for international executives and quick language pill
     expect(find.text('Graphology HR'), findsWidgets);
-    expect(
-      find.textContaining('Yasal Uyarı'),
-      findsWidgets,
-    );
+    expect(find.textContaining('HR Disclaimer'), findsWidgets);
+    expect(find.text('EN'), findsOneWidget);
 
     // Verify zero astrology tabs exist
     expect(find.text('Kozmik Profil'), findsNothing);
+    expect(find.text('Cosmic Profile'), findsNothing);
 
-    // Switch through all 10 supported locales
+    // Switch through all 10 supported locales and verify Turkish switch
     final container = ProviderScope.containerOf(
       tester.element(find.byType(GraphologyHrApp)),
     );
+    await container.read(settingsProvider.notifier).setLanguage('tr');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Yasal Uyarı'), findsWidgets);
+    expect(find.text('TR'), findsOneWidget);
+
     for (final code in AppSettingsState.supportedLanguageCodes) {
       await container.read(settingsProvider.notifier).setLanguage(code);
       await tester.pumpAndSettle();
@@ -72,18 +82,19 @@ void main() {
   });
 
   test(
-      'Pixel CV Gatekeeper rejects blank images and generates 6-dimension corporate HR report for valid handwriting',
+      'Pixel CV Gatekeeper rejects blank images and generates 6-dimension corporate HR reports dynamically across modes and locales',
       () async {
     final blankBytes = _createBlankPaperImage();
     final blankTelemetry = PixelGraphologyExtractor.analyzeBytes(blankBytes);
     expect(blankTelemetry.isValidInkSample, isFalse);
+    expect(blankTelemetry.invalidReasonKey, 'BLANK_OR_NO_INK');
 
     final validBytes = _createHandwritingNoteImage();
     final validTelemetry = PixelGraphologyExtractor.analyzeBytes(validBytes);
     expect(validTelemetry.isValidInkSample, isTrue);
 
     final api = HrGraphologyApiService();
-    final report = await api.analyzeSample(
+    final reportTr = await api.analyzeSample(
       mode: AnalysisMode.handwriting,
       targetRole: TargetRoleProfile.leadership,
       candidateLabel: 'ADAY-2026-01',
@@ -91,20 +102,49 @@ void main() {
       imageBytes: validBytes,
     );
 
-    expect(report.candidateLabel, 'ADAY-2026-01');
-    expect(report.executiveSummary.isNotEmpty, isTrue);
-    expect(report.corporateSpectrum.manageability.isNotEmpty, isTrue);
-    expect(report.corporateSpectrum.roleArchetype.isNotEmpty, isTrue);
-    expect(report.corporateSpectrum.resilience.isNotEmpty, isTrue);
-    expect(report.corporateSpectrum.discipline.isNotEmpty, isTrue);
-    expect(report.dimensions.discipline.isNotEmpty, isTrue);
-    expect(report.dimensions.manageability.isNotEmpty, isTrue);
-    expect(report.dimensions.roleNature.isNotEmpty, isTrue);
-    expect(report.dimensions.resilience.isNotEmpty, isTrue);
-    expect(report.dimensions.teamEgo.isNotEmpty, isTrue);
-    expect(report.dimensions.redFlags.isNotEmpty, isTrue);
+    expect(reportTr.candidateLabel, 'ADAY-2026-01');
+    expect(reportTr.executiveSummary.isNotEmpty, isTrue);
+    expect(reportTr.corporateSpectrum.manageability.isNotEmpty, isTrue);
+    expect(reportTr.corporateSpectrum.roleArchetype.isNotEmpty, isTrue);
+    expect(reportTr.corporateSpectrum.resilience.isNotEmpty, isTrue);
+    expect(reportTr.corporateSpectrum.discipline.isNotEmpty, isTrue);
+    expect(reportTr.dimensions.discipline.isNotEmpty, isTrue);
+    expect(reportTr.dimensions.manageability.isNotEmpty, isTrue);
+    expect(reportTr.dimensions.roleNature.isNotEmpty, isTrue);
+    expect(reportTr.dimensions.resilience.isNotEmpty, isTrue);
+    expect(reportTr.dimensions.teamEgo.isNotEmpty, isTrue);
+    expect(reportTr.dimensions.redFlags.isNotEmpty, isTrue);
     // Handwriting-only mode must NOT include comparative signature synthesis
-    expect(report.comparativeSynthesis ?? '', isEmpty);
+    expect(reportTr.comparativeSynthesis ?? '', isEmpty);
+
+    // Verify dynamic English reports vary properly by mode
+    final reportEnHandwriting = await api.analyzeSample(
+      mode: AnalysisMode.handwriting,
+      targetRole: TargetRoleProfile.leadership,
+      candidateLabel: 'CANDIDATE-EN-1',
+      localeCode: 'en',
+      imageBytes: validBytes,
+    );
+    final reportEnSignature = await api.analyzeSample(
+      mode: AnalysisMode.signature,
+      targetRole: TargetRoleProfile.leadership,
+      candidateLabel: 'CANDIDATE-EN-2',
+      localeCode: 'en',
+      imageBytes: validBytes,
+    );
+    expect(reportEnHandwriting.executiveSummary.isNotEmpty, isTrue);
+    expect(reportEnSignature.corporateSpectrum.discipline,
+        isNot(equals(reportEnHandwriting.corporateSpectrum.discipline)));
+    expect(reportEnSignature.corporateSpectrum.discipline,
+        contains('Signature-Only Scope'));
+
+    // Validation exception preserves custom AI rejection reason
+    const ex = GraphologyValidationException(
+      'AI_REJECTED_NON_INK',
+      customMessage: 'No handwriting strokes detected.',
+    );
+    expect(ex.reasonKey, 'AI_REJECTED_NON_INK');
+    expect(ex.customMessage, 'No handwriting strokes detected.');
 
     // Candidate label prompt-injection sanitizer check
     final sanitized = HrGraphologyApiService.sanitizeCandidateLabel(

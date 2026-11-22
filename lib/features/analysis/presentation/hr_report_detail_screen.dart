@@ -102,6 +102,7 @@ class HrReportDetailScreen extends StatelessWidget {
     if (isLiveAi) {
       return switch (locale) {
         'tr' => 'Canlı Görsel AI',
+        'da' => 'Live Visuel AI',
         'de' => 'Live-Vision-KI',
         'es' => 'IA Visual en Vivo',
         'fr' => 'IA Visuelle en Direct',
@@ -110,6 +111,7 @@ class HrReportDetailScreen extends StatelessWidget {
     }
     return switch (locale) {
       'tr' => 'Çevrimdışı Geometrik Sentez',
+      'da' => 'Lokal Geometrisk Syntese',
       'de' => 'Lokale Geometrie-Synthese',
       'es' => 'Síntesis Geométrica Local',
       'fr' => 'Synthèse Géométrique Locale',
@@ -120,11 +122,13 @@ class HrReportDetailScreen extends StatelessWidget {
   String _methodologyNote(String locale) {
     return switch (locale) {
       'tr' =>
-        'Bilimsel Grafoloji Metodoloji Notu: Bu rapor bütünsel (Gestalt) grafoloji ilkelerine dayanır; tekil bir harf veya çizgiye dayanarak kesin hüküm verilmez. Çizgili/kareli defter kullanımı satır istikametini dışarıdan yönlendirebilir; hızlı toplantı notları ve kalem ucu kalınlığı baskı algısını etkileyebilir. Tüm bulgular yapılandırılmış mülakat ve referans kontrolüyle birlikte değerlendirilmelidir.',
+        'Bilimsel Grafoloji Metodoloji Notu: Bu rapor bütünsel (Gestalt) grafoloji ve Klages Form Düzeyi (Formniveau) ilkelerine dayanır; tekil bir harf veya çizgiden hüküm verilmez ve metnin kelime/konu içeriği değil yalnızca kalem hareket mekaniği yorumlanır. Çizgili/kareli kağıt kullanımı, yazım hızı ve kalem ucu baskı algısını etkileyebilir. Tüm bulgular yapılandırılmış mülakat ve referans kontrolüyle birlikte değerlendirilmelidir.',
+      'da' =>
+        'Videnskabelig Grafologi-metode: Denne vurdering følger holistiske Gestalt-principper og Klages\' formniveau (Formniveau) — ingen konklusion baseres på enkeltstrøg eller på tekstemnet, kun på penbevægelsens mekanik. Linjeret papir, skrivetempo og pennetype påvirker strøgtrykket. Alle hypoteser bør valideres i strukturerede interviews og referencecheck.',
       'de' =>
-        'Methodischer Hinweis: Dieser Bericht folgt ganzheitlichen (Gestalt-)Prinzipien der Graphologie. Liniertes Papier, Schreibtempo und Stiftart beeinflussen die Strichmechanik. Alle Hinweise sind im strukturierten Interview zu validieren.',
+        'Methodischer Hinweis: Dieser Bericht folgt ganzheitlichen Gestalt-Prinzipien und Klages\' Formniveau — bewertet wird ausschließlich die Schreibbewegung, nicht der inhaltliche Text. Liniertes Papier, Schreibtempo und Stiftart beeinflussen die Strichmechanik. Alle Hinweise sind im strukturierten Interview zu validieren.',
       _ =>
-        'Scientific Graphology Methodology Note: This assessment applies holistic Gestalt graphology principles—no hiring hypothesis rests on an isolated stroke. Ruled paper artificially guides baseline alignment, while note-taking speed and pen nib type influence stroke pressure. Validate all behavioral hypotheses via structured interviews and reference checks.',
+        'Scientific Graphology Methodology Note: This assessment applies holistic Gestalt graphology and Klages Form-Level (Formniveau) principles—no hiring hypothesis rests on an isolated stroke or on the semantic topic of the written text; only physical pen movement mechanics are evaluated. Ruled paper artificially guides baseline alignment, while note-taking speed and pen nib type influence stroke pressure. Validate all behavioral hypotheses via structured interviews and reference checks.',
     };
   }
 

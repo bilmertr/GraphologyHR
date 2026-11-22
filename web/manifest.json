@@ -1,11 +1,11 @@
 {
-    "name": "Graphology HR — Kurumsal Aday Analizi",
+    "name": "Graphology HR — Corporate Talent Fit Assessment",
     "short_name": "Graphology HR",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F6F4EF",
     "theme_color": "#F6F4EF",
-    "description": "Kurumsal işe alımlarda el yazısı ve imza mekaniği üzerinden iç disiplin, yönetilebilirlik, stres direnci ve rol uyumu karar destek sistemi.",
+    "description": "Corporate HR interview decision-support system assessing work discipline, manageability, pressure resilience, and role fit from handwriting mechanics.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

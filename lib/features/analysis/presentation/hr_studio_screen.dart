@@ -40,7 +40,19 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
       final bytes = await file.readAsBytes();
       if (!mounted) return;
       ref.read(hrAnalysisProvider.notifier).setImageBytes(bytes);
-    } catch (_) {}
+    } catch (_) {
+      if (!mounted) return;
+      final lang = ref.read(settingsProvider).languageCode;
+      final msg = switch (lang) {
+        'tr' => 'Seçilen dosya geçerli bir görsel olarak yüklenemedi. Lütfen JPEG veya PNG yükleyin.',
+        'da' => 'Den valgte fil kunne ikke indlæses som billede. Brug venligst JPEG eller PNG.',
+        'de' => 'Die ausgewählte Datei konnte nicht als Bild geladen werden. Bitte JPEG oder PNG verwenden.',
+        _ => 'Could not load the selected file as an image. Please upload a valid JPEG or PNG photo.',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+      );
+    }
   }
 
   void _showImageZoomDialog(BuildContext context, Uint8List bytes) {
@@ -99,17 +111,90 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
   }
 
   String _roleLabel(AppLocalizations l10n, TargetRoleProfile role) {
-    switch (role) {
-      case TargetRoleProfile.general:
-        return l10n.roleGeneral;
-      case TargetRoleProfile.leadership:
-        return l10n.roleLeadership;
-      case TargetRoleProfile.execution:
-        return l10n.roleExecution;
-      case TargetRoleProfile.sales:
-        return l10n.roleSales;
-      case TargetRoleProfile.technical:
-        return l10n.roleTechnical;
+    return switch (role) {
+      TargetRoleProfile.general => l10n.roleGeneral,
+      TargetRoleProfile.leadership => l10n.roleLeadership,
+      TargetRoleProfile.execution => l10n.roleExecution,
+      TargetRoleProfile.sales => l10n.roleSales,
+      TargetRoleProfile.technical => l10n.roleTechnical,
+    };
+  }
+
+  String _localizedRejectionText(
+    String lang,
+    String reasonKey,
+    String? customMessage,
+  ) {
+    if (customMessage != null && customMessage.trim().isNotEmpty) {
+      return customMessage.trim();
+    }
+    switch (reasonKey) {
+      case 'BLANK_OR_NO_INK':
+        return switch (lang) {
+          'tr' =>
+            'Yüklenen görselde analiz edilebilecek yeterli el yazısı veya imza izi tespit edilemedi. Lütfen boş veya çok silik olmayan, net bir örnek yükleyin.',
+          'da' =>
+            'Der blev ikke fundet nok håndskrift eller underskrift på billedet. Upload venligst et tydeligt, læseligt billede.',
+          'de' =>
+            'Auf dem Bild wurde zu wenig Handschrift oder Unterschrift erkannt. Bitte laden Sie ein klares Dokumentfoto hoch.',
+          _ =>
+            'Insufficient handwriting or signature ink strokes detected in the uploaded image. Please upload a clearer, higher-contrast photo.',
+        };
+      case 'NOT_A_DOCUMENT_OR_TOO_DARK':
+        return switch (lang) {
+          'tr' =>
+            'Yüklenen fotoğraf aydınlatma veya kontrast açısından geçerli bir kağıt belge gibi görünmüyor. Lütfen kağıdın tamamının iyi aydınlatıldığı net bir fotoğraf çekin.',
+          'da' =>
+            'Billedet ligner ikke et tydeligt oplyst papirdokument (for mørkt eller for kraftige farver). Prøv et foto i bedre belysning.',
+          'de' =>
+            'Das Foto wirkt nicht wie ein gut beleuchtetes Papierdokument (zu dunkel oder zu kontrastarm). Bitte bei gutem Licht neu aufnehmen.',
+          _ =>
+            'The uploaded photo does not resemble a well-lit paper document (too dark or overly saturated background). Please retake in even lighting.',
+        };
+      case 'IMAGE_EMPTY_OR_TOO_LARGE':
+        return switch (lang) {
+          'tr' =>
+            'Görsel dosyası boş veya izin verilen 18 MB boyut sınırını aşıyor. Lütfen daha küçük bir JPEG/PNG yükleyin.',
+          'da' =>
+            'Billedfilen er tom eller overskrider grænsen på 18 MB. Upload venligst en mindre JPEG- eller PNG-fil.',
+          'de' =>
+            'Die Bilddatei ist leer oder größer als 18 MB. Bitte laden Sie eine kleinere JPEG-/PNG-Datei hoch.',
+          _ =>
+            'The uploaded image file is empty or exceeds the 18 MB size limit. Please select a standard JPEG or PNG photo.',
+        };
+      case 'UNDECODABLE_OR_TOO_SMALL':
+        return switch (lang) {
+          'tr' =>
+            'Görsel formatı okunamadı veya çözünürlük çok düşük. Lütfen standart bir JPEG/PNG fotoğraf yükleyin.',
+          'da' =>
+            'Billedformatet kunne ikke læses, eller opløsningen er for lav. Brug venligst en standard JPEG/PNG-fil.',
+          'de' =>
+            'Das Bildformat ist ungültig oder die Auflösung zu gering. Bitte eine normale JPEG- oder PNG-Datei wählen.',
+          _ =>
+            'Unable to decode the image format or resolution is too low. Please upload a sharp JPEG or PNG photo.',
+        };
+      case 'AI_REJECTED_NON_INK':
+        return switch (lang) {
+          'tr' =>
+            'Görsel AI doğrulayıcı bu fotoğrafta gerçek el yazısı veya el ile atılmış bir imza tespit edemedi. Dijital/bilgisayar yazısı yerine kalemle yazılmış kağıt örneği yükleyin.',
+          'da' =>
+            'Den visuelle AI-kontrol registrerede ingen ægte håndskrift eller håndskrevet signatur. Upload venligst håndskrevne noter på papir frem for trykt tekst.',
+          'de' =>
+            'Die visuelle KI-Prüfung konnte keine echte Handschrift oder handschriftliche Signatur erkennen (stattdessen z. B. gedruckter Text). Bitte ein handgeschriebenes Blatt hochladen.',
+          _ =>
+            'Visual AI validation could not confirm genuine handwriting or a handwritten signature (e.g., digitally typed text or non-document photo). Please upload real pen-on-paper writing.',
+        };
+      default:
+        return switch (lang) {
+          'tr' =>
+            'Örnek doğrulanamadı. Lütfen el yazısının ve/veya imzanın net göründüğü başka bir fotoğraf yükleyin.',
+          'da' =>
+            'Prøven kunne ikke valideres. Upload venligst et andet tydeligt foto af håndskrift eller underskrift.',
+          'de' =>
+            'Die Probe konnte nicht validiert werden. Bitte laden Sie ein anderes klares Foto von Handschrift oder Unterschrift hoch.',
+          _ =>
+            'The sample could not be validated. Please upload another clear photo of handwriting or a signature on paper.',
+        };
     }
   }
 
@@ -132,12 +217,104 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header
-              Text(
-                l10n.appTitle,
-                style: isCompact
-                    ? theme.textTheme.headlineMedium
-                    : theme.textTheme.displaySmall,
+              // Header + Quick Language Switcher Pill
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.appTitle,
+                      style: isCompact
+                          ? theme.textTheme.headlineMedium
+                          : theme.textTheme.displaySmall,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  PopupMenuButton<String>(
+                    tooltip: l10n.settingsLanguage,
+                    initialValue: lang,
+                    onSelected: (code) =>
+                        ref.read(settingsProvider.notifier).setLanguage(code),
+                    itemBuilder: (_) => AppSettingsState.supportedLanguageCodes
+                        .map(
+                          (code) => PopupMenuItem<String>(
+                            value: code,
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 28,
+                                  child: Text(
+                                    code.toUpperCase(),
+                                    style:
+                                        theme.textTheme.labelMedium?.copyWith(
+                                      color: JapandiColors.brassGold,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    AppSettingsState
+                                            .languageDisplayNames[code] ??
+                                        code,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: code == lang
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                if (code == lang)
+                                  const Icon(
+                                    Icons.check,
+                                    size: 16,
+                                    color: JapandiColors.brassGold,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: JapandiColors.brassGold.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.language_outlined,
+                            size: 15,
+                            color: JapandiColors.brassGold,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            lang.toUpperCase(),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: JapandiColors.brassGold,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 16,
+                            color: JapandiColors.brassGold,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               Text(
@@ -303,7 +480,11 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          l10n.captureGuideHandwriting,
+                          _localizedRejectionText(
+                            lang,
+                            state.rejectionError!,
+                            state.rejectionMessage,
+                          ),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: JapandiColors.terracottaClay,
                             fontWeight: FontWeight.w600,
@@ -354,10 +535,18 @@ class _HrStudioScreenState extends ConsumerState<HrStudioScreen> {
     final cardHint = isSignatureOnly
         ? l10n.captureGuideSignature
         : l10n.captureGuideHandwriting;
-    final clearTooltip = lang == 'tr' ? 'Görseli Kaldır' : 'Remove Photo';
-    final zoomHint = lang == 'tr'
-        ? 'Okunaklılığı kontrol etmek için görsele dokunup yakınlaştırın'
-        : 'Tap image to zoom & inspect stroke clarity';
+    final clearTooltip = switch (lang) {
+      'tr' => 'Görseli Kaldır',
+      'da' => 'Fjern foto',
+      'de' => 'Foto entfernen',
+      _ => 'Remove Photo',
+    };
+    final zoomHint = switch (lang) {
+      'tr' => 'Okunaklılığı kontrol etmek için görsele dokunup yakınlaştırın',
+      'da' => 'Tryk på billedet for at zoome og kontrollere skriften',
+      'de' => 'Zum Vergrößern und Prüfen auf das Bild tippen',
+      _ => 'Tap image to zoom & inspect stroke clarity',
+    };
 
     return Card(
       child: Padding(
@@ -484,19 +673,36 @@ class _HrSamplingGuideCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isTr = locale == 'tr';
 
-    final title = isTr
-        ? 'İK Mülakatı İçin Doğru El Yazısı Örneği Rehberi'
-        : 'HR Interview Handwriting Collection Protocol';
+    final title = switch (locale) {
+      'tr' => 'İK Mülakatı İçin Doğru El Yazısı Örneği Rehberi',
+      'da' => 'Protokol for Håndskriftprøve ved Jobsamtale',
+      'de' => 'Leitfaden zur Schriftproben-Erfassung im Interview',
+      _ => 'HR Interview Handwriting Collection Protocol',
+    };
 
-    final body = isTr
-        ? '• Çizgisiz A4 Kağıt Standartı: Çizgili veya kareli defterler satır istikametini yapay olarak hizalar; adayın kendi iç düzenini ve enerji kontrolünü görmek için mülakatta çizgisiz beyaz A4 kağıt verin (çizgili not yüklenirse motorumuz bunu algılayıp çizgiyle kurulan ilişkiyi analiz eder).\n'
+    final body = switch (locale) {
+      'tr' =>
+        '• Çizgisiz A4 Kağıt Standartı: Çizgili veya kareli defterler satır istikametini yapay olarak hizalar; adayın kendi iç düzenini ve enerji kontrolünü görmek için mülakatta çizgisiz beyaz A4 kağıt verin (çizgili not yüklenirse motorumuz bunu algılayıp çizgiyle kurulan ilişkiyi analiz eder).\n'
             '• Doğaçlama İş Notu (6–10 Satır): Adaydan ezbere/kopyalanmış bir metin yerine "önceki rolündeki bir projeyi veya çalışma tarzını" kendi cümleleriyle yazıp altını imzalamasını isteyin.\n'
-            '• Mod Sınırı Uyarısı: ${mode == AnalysisMode.signature ? "Şu an seçili olan Sadece İmza modu yalnızca adayın dış otorite iddiasını ve mülakat maskesini ölçer; günlük iş takibi ve iç disiplin için El Yazısı + İmza modu önerilir." : "El Yazısı + İmza modu, adayın gerçek iş alışkanlığı ile mülakat vitrini arasındaki farkı yakalamak için en güvenilir moddur."}'
-        : '• Unlined A4 Paper Standard: Ruled notebook lines artificially stabilize baseline slope; provide unlined white A4 paper during interviews to observe authentic self-organization (if ruled notes are uploaded, our engine evaluates deviations relative to the rule).\n'
+            '• İçerik-Körlüğü (Content-Blind) İlkesi: Yalnızca kalem hareket mekaniği (baskı, eğim, ritim, marjin) ölçülür; yazının konusu veya geçen kelimeler karakter analizini etkilemez.\n'
+            '• Mod Sınırı Uyarısı: ${mode == AnalysisMode.signature ? "Şu an seçili olan Sadece İmza modu yalnızca adayın dış otorite iddiasını ve mülakat maskesini ölçer; günlük iş takibi ve iç disiplin için El Yazısı + İmza modu önerilir." : "El Yazısı + İmza modu, adayın gerçek iş alışkanlığı ile mülakat vitrini arasındaki farkı yakalamak için en güvenilir moddur."}',
+      'da' =>
+        '• Ulinjeret A4-papir: Linjeret papir styrer linjeføringen kunstigt; brug helst blankt hvidt A4-papir til at vurdere egen organisering (vores motor genkender dog linjeret papir og vurderer afvigelser fra linjen).\n'
+            '• Spontan tekst (6–10 linjer): Bed kandidaten beskrive et projekt eller arbejdsstil med egne ord og underskrive under teksten.\n'
+            '• Indholdsblindhed (Content-Blind): Kun penbevægelsens mekanik vurderes (tryk, hældning, rytme, marginer) — aldrig selve ordene eller emnet i noten.\n'
+            '• Tilstandsgrænse: ${mode == AnalysisMode.signature ? "Kun Underskrift måler udelukkende ydre autoritet og samtale-persona; brug Håndskrift + Underskrift for daglig arbejdsdisciplin." : "Håndskrift + Underskrift giver højeste validitet ved at sammenligne daglig eksekvering med ydre facade."}',
+      'de' =>
+        '• Unliniertes A4-Papier: Linierte Hefte geben die Zeilenführung künstlich vor; nutzen Sie weißes A4-Papier (bei linierten Notizen erkennt unsere Engine dies automatisch).\n'
+            '• Spontane Arbeitsnotiz (6–10 Zeilen): Bitten Sie um eine kurze freie Projektbeschreibung samt Unterschrift.\n'
+            '• Inhaltsblindes Prinzip: Bewertet wird ausschließlich die Schreibmechanik (Druck, Neigung, Rhythmus, Ränder), niemals der Textinhalt.\n'
+            '• Modus-Hinweis: ${mode == AnalysisMode.signature ? "Reine Unterschriftsanalyse erfasst nur das äußere Auftreten; wählen Sie Handschrift + Unterschrift für Arbeitsdisziplin." : "Handschrift + Unterschrift bietet die höchste Aussagekraft."}',
+      _ =>
+        '• Unlined A4 Paper Standard: Ruled notebook lines artificially stabilize baseline slope; provide unlined white A4 paper during interviews to observe authentic self-organization (if ruled notes are uploaded, our engine detects them and evaluates deviations relative to the rule).\n'
             '• Spontaneous Prompt (6–10 Lines): Ask the candidate to briefly describe a recent project or workflow in their own words and sign beneath it rather than copying printed text.\n'
-            '• Mode Validity Note: ${mode == AnalysisMode.signature ? "Signature-Only mode measures projected authority and interview persona only; use Combined mode to assess daily operational discipline." : "Combined (Handwriting + Signature) mode provides the highest validity by contrasting daily execution habits against interview persona."}';
+            '• Content-Blind Principle: Only physical pen movement mechanics are evaluated (pressure, slant, rhythm, zones, margins)—never the semantic topic or words written in the note.\n'
+            '• Mode Validity Note: ${mode == AnalysisMode.signature ? "Signature-Only mode measures projected authority and interview persona only; use Combined mode to assess daily operational discipline." : "Combined (Handwriting + Signature) mode provides the highest validity by contrasting daily execution habits against interview persona."}',
+    };
 
     return Card(
       child: Theme(
